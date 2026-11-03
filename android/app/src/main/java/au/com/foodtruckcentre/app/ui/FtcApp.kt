@@ -1,6 +1,7 @@
 package au.com.foodtruckcentre.app.ui
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -47,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -101,7 +101,7 @@ private val tabs = listOf(
 fun FtcApp() {
     val nav = rememberNavController()
     // Activity-scoped view models: forms keep their contents while moving between tabs.
-    val owner = LocalContext.current as ComponentActivity
+    val owner = checkNotNull(LocalActivity.current as? ComponentActivity) { "FtcApp must be hosted in a ComponentActivity" }
     val quoteVm: QuoteViewModel = viewModel(owner)
     val contactVm: ContactViewModel = viewModel(owner)
     val contentVm: ContentViewModel = viewModel(owner)
