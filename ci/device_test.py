@@ -144,6 +144,7 @@ for i in range(10):
     if i == 2: shot('03-home-scrolled')
     if len(seen) == len(sections): break
     adb('shell', 'input', 'swipe', '540', '1700', '540', '900', '400'); time.sleep(1.2)
+seen.update(t for t in sections if t in ' '.join(visible_texts()))  # check the final screen too
 missing = [t for t in sections if t not in seen]
 note(not missing, 'home sections render' + (f' (missing: {missing})' if missing else ''))
 shot('03b-home-bottom')
