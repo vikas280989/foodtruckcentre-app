@@ -20,7 +20,10 @@ def adb(*a, check=True, binary=False):
 def note(ok, msg):
     line = ('PASS ' if ok else 'FAIL ') + msg
     print(line); log.write(line + '\n'); log.flush()
-    if not ok: failures.append(msg)
+    if not ok:
+        failures.append(msg)
+        diag = ' | '.join(t.replace('\n', ' ')[:60] for t in visible_texts()[:40])
+        print('     on screen: ' + diag); log.write('     on screen: ' + diag + '\n')
 
 def shot(name):
     data = adb('exec-out', 'screencap', '-p', binary=True)
@@ -47,6 +50,16 @@ def find(text, exact=False):
                     x1, y1, x2, y2 = map(int, b)
                     return ((x1 + x2) // 2, (y1 + y2) // 2)
     return None
+
+def visible_texts():
+    root = ui()
+    if root is None: return []
+    out = []
+    for n in root.iter('node'):
+        for attr in ('text', 'content-desc'):
+            v = (n.get(attr) or '').strip()
+            if v and v not in out: out.append(v)
+    return out
 
 def tap_text(text, exact=False, wait=10):
     end = time.time() + wait
@@ -89,11 +102,18 @@ note(alive(), 'app launched and is running')
 note(visible('Book Australia', 20), 'home screen shows hero "Book Australia’s Best Food Trucks"')
 shot('02-home')
 
-# 3. Scroll home
-for i in range(3):
-    adb('shell', 'input', 'swipe', '540', '1800', '540', '700', '400'); time.sleep(1.2)
-shot('03-home-scrolled')
-note(visible('Catering for every occasion', 5) or visible('Corporate Catering', 5) or visible('How to Book', 5), 'home sections render')
+# 3. Scroll home step by step and check every section appears
+sections = ['How to Book with Us', 'What would you like to serve?', 'Catering for every occasion', 'Have a question?']
+seen = set()
+for i in range(10):
+    texts = ' '.join(visible_texts())
+    seen.update(t for t in sections if t in texts)
+    if i == 2: shot('03-home-scrolled')
+    if len(seen) == len(sections): break
+    adb('shell', 'input', 'swipe', '540', '1700', '540', '900', '400'); time.sleep(1.2)
+missing = [t for t in sections if t not in seen]
+note(not missing, 'home sections render' + (f' (missing: {missing})' if missing else ''))
+shot('03b-home-bottom')
 
 # 4. Tabs
 for label, expect, name in [
@@ -119,7 +139,8 @@ for i in range(12):
     adb('shell', 'input', 'swipe', '540', '1900', '540', '400', '250'); time.sleep(0.4)
 tap_text('Send Quote Request', exact=True)
 time.sleep(2)
-note(visible('highlighted field', 8), 'empty required fields are rejected with a message')
+# The form scrolls up to the first problem field, so check for that field's message.
+note(visible('Please enter your full name', 8) or visible('highlighted field', 2), 'empty required fields are rejected with a message')
 shot('09-quote-validation')
 
 # 6. Legal page + back
