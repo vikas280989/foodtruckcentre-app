@@ -29,7 +29,31 @@ def shot(name):
     data = adb('exec-out', 'screencap', '-p', binary=True)
     open(os.path.join(OUT, f'{name}.png'), 'wb').write(data)
 
+def dismiss_system_dialogs(root):
+    """CI emulators often show 'System UI isn't responding'. Tap 'Wait' so testing can continue."""
+    if root is None: return False
+    texts = [n.get('text') or '' for n in root.iter('node')]
+    if not any("isn't responding" in t or 'keeps stopping' in t for t in texts): return False
+    for n in root.iter('node'):
+        if (n.get('text') or '') in ('Wait', 'Close app', 'OK'):
+            b = list(map(int, re.findall(r'\d+', n.get('bounds', ''))))
+            if len(b) == 4 and (n.get('text') == 'Wait' or 'Wait' not in texts):
+                adb('shell', 'input', 'tap', str((b[0] + b[2]) // 2), str((b[1] + b[3]) // 2)); time.sleep(2)
+                print('     (dismissed a system "not responding" dialog)')
+                return True
+    return False
+
 def ui():
+    for attempt in range(5):
+        root = raw_ui()
+        if root is not None and dismiss_system_dialogs(root):
+            continue
+        if root is not None:
+            return root
+        time.sleep(1)
+    return None
+
+def raw_ui():
     for _ in range(3):
         adb('shell', 'uiautomator', 'dump', '/sdcard/ui.xml', check=False)
         x = adb('shell', 'cat', '/sdcard/ui.xml', check=False)
@@ -83,7 +107,16 @@ def alive():
 def crashed():
     return 'FATAL EXCEPTION' in adb('logcat', '-d', '-b', 'crash', check=False)
 
+# Let the freshly booted emulator settle (avoids System UI ANR dialogs on slow CI machines).
+for _ in range(60):
+    if adb('shell', 'getprop', 'sys.boot_completed', check=False).strip() == '1': break
+    time.sleep(2)
+time.sleep(25)
+adb('shell', 'am', 'broadcast', '-a', 'android.intent.action.CLOSE_SYSTEM_DIALOGS', check=False)
+adb('shell', 'input', 'keyevent', '82', check=False)
+ui()
 adb('logcat', '-c', check=False)
+adb('logcat', '-b', 'crash', '-c', check=False)
 # 1. Install both APKs
 for apk in (REL, DBG):
     out = adb('install', '-r', apk, check=False)
@@ -165,7 +198,12 @@ shot('11-debug-build')
 
 crash_log = adb('logcat', '-d', '-b', 'crash', check=False)
 open(os.path.join(OUT, 'crash-log.txt'), 'w').write(crash_log)
-note('FATAL EXCEPTION' not in crash_log, 'no crashes recorded during the whole test')
+app_crashes = [blk for blk in crash_log.split('FATAL EXCEPTION')[1:] if f'Process: {PKG}' in blk]
+for blk in app_crashes:
+    print('APP CRASH: FATAL EXCEPTION' + blk[:2500])
+other = len(crash_log.split('FATAL EXCEPTION')) - 1 - len(app_crashes)
+if other: print(f'     ({other} crash(es) in other system processes ignored)')
+note(not app_crashes, 'no app crashes recorded during the whole test')
 open(os.path.join(OUT, 'logcat.txt'), 'w').write(adb('logcat', '-d', '-t', '3000', check=False))
 
 log.write(f'\n{len(failures)} failure(s)\n'); log.close()
