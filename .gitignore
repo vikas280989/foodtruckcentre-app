@@ -1,0 +1,26 @@
+# Build output
+**/.gradle/
+**/build/
+android/local.properties
+.idea/
+*.iml
+.DS_Store
+release/
+device-results/
+
+# Secrets – NEVER commit
+.env
+.env.*
+*.env
+*.pem
+*.key
+local.properties
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing/
+**/private/config.php
+**/private/storage/**
+!**/private/storage/.htaccess
+backend/tests/last_results.json

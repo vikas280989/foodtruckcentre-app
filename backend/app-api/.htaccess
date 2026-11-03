@@ -1,0 +1,13 @@
+# Food Truck Centre app API
+Options -Indexes
+# HTTPS only
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+RewriteRule ^ - [F]
+# Only the public endpoints in v1/ may be requested
+RewriteRule ^(lib|vendor|private|tools)(/|$) - [F,L]
+<FilesMatch "\.(md|json|log|sample\.php|txt)$">
+  Require all denied
+</FilesMatch>
+LimitRequestBody 16384

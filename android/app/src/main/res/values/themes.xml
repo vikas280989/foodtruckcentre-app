@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FoodTruckCentre" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ftc_cream</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Branded system splash (Android 12+ API, back-ported by core-splashscreen) -->
+    <style name="Theme.FoodTruckCentre.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ftc_cream</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_badge</item>
+        <item name="windowSplashScreenAnimationDuration">600</item>
+        <item name="postSplashScreenTheme">@style/Theme.FoodTruckCentre</item>
+    </style>
+</resources>

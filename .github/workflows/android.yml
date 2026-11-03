@@ -1,0 +1,195 @@
+name: Build, test and verify Android APKs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach the APKs to a (private) GitHub Release
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend (PHP) security & functional tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl
+      - name: Lint PHP
+        run: find backend -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Run API tests
+        run: python3 backend/tests/run_tests.py
+
+  build:
+    name: Unit tests, lint, build & sign
+    runs-on: ubuntu-24.04
+    needs: backend-tests
+    defaults:
+      run:
+        working-directory: android
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0 platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check signing secrets are configured
+        env:
+          KS: ${{ secrets.FTC_KEYSTORE_BASE64 }}
+          SP: ${{ secrets.FTC_KEYSTORE_PASSWORD }}
+          KA: ${{ secrets.FTC_KEY_ALIAS }}
+          KP: ${{ secrets.FTC_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for v in KS SP KA KP; do [ -z "${!v}" ] && { echo "::error::Signing secret $v is missing"; missing=1; }; done
+          exit $missing
+
+      - name: Restore release keystore (temporary, never committed)
+        env:
+          KS: ${{ secrets.FTC_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KS" | base64 --decode > "$RUNNER_TEMP/ftc-release.jks"
+          echo "FTC_KEYSTORE_FILE=$RUNNER_TEMP/ftc-release.jks" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest testReleaseUnitTest
+
+      - name: Android lint (release)
+        run: ./gradlew --no-daemon lintRelease
+
+      - name: Build debug and signed release APKs
+        env:
+          FTC_KEYSTORE_PASSWORD: ${{ secrets.FTC_KEYSTORE_PASSWORD }}
+          FTC_KEY_ALIAS: ${{ secrets.FTC_KEY_ALIAS }}
+          FTC_KEY_PASSWORD: ${{ secrets.FTC_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Verify signatures and package
+        id: meta
+        run: |
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          mkdir -p ../release
+          REL=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -1)
+          DBG=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          test -f "$REL" || { echo "::error::Signed release APK was not produced"; exit 1; }
+          "$BT/zipalign" -c -v 4 "$REL" > /dev/null
+          "$BT/apksigner" verify --verbose --print-certs "$REL" | tee ../release/release-signature.txt
+          grep -q "CN=Food Truck Centre" ../release/release-signature.txt || { echo "::error::Release APK is not signed with the Food Truck Centre key"; exit 1; }
+          "$BT/apksigner" verify "$DBG"
+          "$BT/aapt2" dump badging "$REL" | grep -E "package:|uses-permission|sdkVersion|targetSdkVersion|application-label:" | tee ../release/release-manifest.txt
+          if grep "uses-permission" ../release/release-manifest.txt | grep -v "android.permission.INTERNET" | grep -v "DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"; then echo "::error::Unexpected permission in release APK"; exit 1; fi
+          cp "$REL" ../release/FoodTruckCentre.apk
+          cp "$DBG" ../release/FoodTruckCentre-debug.apk
+          (cd ../release && sha256sum FoodTruckCentre.apk FoodTruckCentre-debug.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check for secrets or cleartext URLs inside the APK
+        run: |
+          cd ../release && mkdir -p x && cd x && unzip -q -o ../FoodTruckCentre.apk
+          if grep -rIl -E "smtp\.|SMTP_PASS|password=|BEGIN PRIVATE KEY" . ; then echo "::error::Possible secret in APK"; exit 1; fi
+          if strings classes*.dex | grep -E "^http://[a-z]" | grep -v "schemas.android.com\|www.w3.org\|ns.adobe.com\|apache.org\|xmlpull.org"; then echo "::warning::Plain HTTP string found in code (blocked at runtime by network security config)"; fi
+          cd .. && rm -rf x
+
+      - name: Dependency vulnerability scan (OSV)
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon :app:dependencies --configuration releaseRuntimeClasspath > ../release/dependencies.txt
+          python3 ../ci/osv_check.py ../release/dependencies.txt | tee ../release/vulnerability-scan.txt
+
+      - name: Remove keystore from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ftc-release.jks"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FoodTruckCentre-apks
+          path: |
+            release/FoodTruckCentre.apk
+            release/FoodTruckCentre-debug.apk
+            release/SHA256SUMS.txt
+            release/release-signature.txt
+            release/release-manifest.txt
+            release/dependencies.txt
+            release/vulnerability-scan.txt
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-and-lint-reports
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+          if-no-files-found: ignore
+
+  device-test:
+    name: Install & launch on Android emulator
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: FoodTruckCentre-apks
+          path: release
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Run app on emulator (API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 ci/device_test.py release/FoodTruckCentre.apk release/FoodTruckCentre-debug.apk device-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-test-results
+          path: device-results/
+
+  publish:
+    name: Attach APKs to a private GitHub Release
+    runs-on: ubuntu-24.04
+    needs: [build, device-test]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: FoodTruckCentre-apks
+          path: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}-build.${{ github.run_number }}
+          name: Food Truck Centre ${{ needs.build.outputs.version }} (build ${{ github.run_number }})
+          body: |
+            Signed release APK and debug APK built and verified by GitHub Actions run ${{ github.run_id }}.
+            - FoodTruckCentre.apk – signed release build (install this one)
+            - FoodTruckCentre-debug.apk – debug build for testing (installs alongside, as "Food Truck Centre" debug)
+            Unit tests, lint, backend tests, signature checks and emulator install/launch test all passed.
+          files: |
+            release/FoodTruckCentre.apk
+            release/FoodTruckCentre-debug.apk
+            release/SHA256SUMS.txt
