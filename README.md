@@ -1,7 +1,7 @@
 # Food Truck Centre – Android app
 
 Native Android app for **Food Truck Centre Australia** ([foodtruckcentre.com.au](https://foodtruckcentre.com.au/)).
-Customers can browse the catering services, see the featured food truck, request quotes and contact the business.
+Customers create an account (email + password), browse the catering services, see the featured food truck, request quotes, contact the business and follow their enquiries.
 **The app has no payment functionality.**
 
 | | |
@@ -10,7 +10,7 @@ Customers can browse the catering services, see the featured food truck, request
 | Package | `au.com.foodtruckcentre.app` (debug build: `au.com.foodtruckcentre.app.debug`) |
 | Platform | Android 8.0 (API 26) and newer, targets API 36 |
 | Stack | Kotlin, Jetpack Compose, Material 3, OkHttp, kotlinx.serialization, Coil |
-| Backend | Small PHP API (`backend/app-api`) for your existing Hostinger hosting, sending email via SMTP (PHPMailer) |
+| Backend | WordPress plugin **FTC App API** (`wordpress-plugin/ftc-app-api`, live on foodtruckcentre.com.au): customer accounts, enquiries, email via WP Mail SMTP, admin screens. (`backend/app-api` is the older standalone version, not used.) |
 | Permissions | `INTERNET` only |
 
 ## What's in this repository
@@ -28,6 +28,8 @@ docs/               Deployment, signing, security audit, test report, limitation
 ## Screens
 
 1. **Splash** – branded system splash, then an animated logo intro
+1. **Log in / Create account / Forgot password** – login is required to use the app
+1. **My account** – profile, *My enquiries* with progress (New → Contacted → Quoted → Confirmed → Closed), log out, delete account
 2. **Home** – hero “Book Australia’s Best Food Trucks”, the website’s three highlights, How to Book, cuisines, services, featured truck, contact, footer
 3. **Request a Quote** – the website’s event enquiry form: 10 cuisines (max 3), name, email, phone, date, serving time, address, postcode, event type, meals (min 50), the four event requirement questions and additional information
 4. **Catering Services** – the six services published on the website, each with *Request a Quote*

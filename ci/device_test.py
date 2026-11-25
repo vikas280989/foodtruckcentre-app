@@ -294,7 +294,7 @@ note(ok, 'quote sent – success screen shown')
 shot('08-quote-success')
 ref = next((t for t in visible_texts() if re.match(r'^FTC-\d{6}-[A-F0-9]{6}$', t)), '')
 note(bool(ref), f'enquiry reference shown ({ref})')
-stored = wpcli(f'global $wpdb; $u=get_user_by("email","{EMAIL}"); echo $wpdb->get_var($wpdb->prepare("SELECT CONCAT(status,\'|\',user_id=%d) FROM ".ftc_app_table()." WHERE enquiry_ref=%s", $u->ID, "{ref}"));')
+stored = wpcli(f'global $wpdb; $u=get_user_by("email","{EMAIL}"); $r=$wpdb->get_row($wpdb->prepare("SELECT status, user_id FROM ".ftc_app_table()." WHERE enquiry_ref=%s", "{ref}"), ARRAY_A); echo $r ? $r["status"] . "|" . ((int)$r["user_id"] === (int)$u->ID ? 1 : 0) : "missing";')
 note(stored == 'sent|1', f'server stored the enquiry, emailed it, and linked it to the account ({stored})')
 
 # ---------- 6. My enquiries ----------
