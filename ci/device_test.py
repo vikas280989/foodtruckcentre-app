@@ -260,7 +260,9 @@ tap('When is the event *', exact=False)
 target = datetime.date.today() + datetime.timedelta(days=5)
 if target.month != datetime.date.today().month:
     tap('Change to next month', exact=False)
-picked = tap(str(target.day), exact=True)
+# Calendar cells are announced as e.g. "Sunday, November 30, 2026"
+label = f"{target.strftime('%A')}, {target.strftime('%B')} {target.day}, {target.year}"
+picked = tap(label, exact=False)
 tap('Confirm', exact=True)
 note(picked and visible(target.strftime('%b %Y'), 5, exact=False), f'event date chosen with the date picker ({target})')
 fill('Postcode', '2000')
