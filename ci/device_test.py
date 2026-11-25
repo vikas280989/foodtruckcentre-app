@@ -148,11 +148,16 @@ def type_text(t):
 
 
 def fill(label, value):
-    """Tap a text field by its label and type into it."""
-    if not tap(label, exact=False):
+    """Close the keyboard (so it can't cover the field), bring the field into view, tap it and type."""
+    hide_keyboard()
+    scroll_to(label, exact=False, max_swipes=6)
+    found = [p for p in nodes(label, exact=False) if 250 < p[1] < 2000]
+    if not found:
         return False
+    tap_xy(found[0])
     adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
     type_text(value)
+    hide_keyboard()
     return True
 
 
@@ -239,7 +244,7 @@ for label, expect, name in [('Services', 'Corporate Catering', '04-services'), (
     ok = tap(label, exact=True, index=-1)
     note(ok and visible(expect, 15), f'navigate to {label}')
     shot(name)
-note(visible(NAME, 5), 'contact form is pre-filled with the customer name')
+note(visible('Send us a message', 5) and visible(NAME, 5), 'contact form is pre-filled with the customer name')
 
 # ---------- 5. Request a quote (real form) ----------
 tap('Request a Quote', exact=True, index=-1)
