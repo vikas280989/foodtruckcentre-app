@@ -1,7 +1,7 @@
 === Food Truck Centre App API ===
 Requires at least: 6.0
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 
 Receives enquiries from the Food Truck Centre Android app.
@@ -17,7 +17,7 @@ Receives enquiries from the Food Truck Centre Android app.
 * No payments. No changes to pages, themes or other plugins.
 
 == Settings ==
-App Enquiries → Settings: enquiry recipient (default vikas.kumar617@gmail.com), email shown in the app,
+App Enquiries → Settings: enquiry recipient (default info@foodtruckcentre.com.au), email shown in the app,
 spam limits, "Send a test email" and "Retry undelivered enquiries now".
 
 == Uninstall ==

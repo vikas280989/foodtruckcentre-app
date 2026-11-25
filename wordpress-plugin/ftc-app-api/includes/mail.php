@@ -57,7 +57,7 @@ function ftc_app_email_text(string $heading, array $sections, string $enquiryId)
  */
 function ftc_app_send(array $row): array
 {
-    $to = (string) get_option('ftc_app_recipient', 'vikas.kumar617@gmail.com');
+    $to = (string) get_option('ftc_app_recipient', 'info@foodtruckcentre.com.au');
     if (!ftc_app_valid_email($to)) {
         return [false, 'Recipient email in Settings is not valid'];
     }

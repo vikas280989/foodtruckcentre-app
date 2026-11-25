@@ -28,7 +28,7 @@ You can reuse the mailbox your WordPress SMTP plugin already uses instead.
 
 1. In the private folder, copy `config.sample.php` to **`config.php`**.
 2. Edit `config.php`:
-   - `recipient_email` – where every enquiry goes (currently `vikas.kumar617@gmail.com`). This is the **only** place it is set.
+   - `recipient_email` – where every enquiry goes (currently `info@foodtruckcentre.com.au`). This is the **only** place it is set.
    - `public_contact_email` – shown on the app's Contact screen (leave `''` to hide it).
    - `mail` → `host`, `port`, `encryption`, `username`, `password`, `from_email`.
      Hostinger: `smtp.hostinger.com`, port `465`, encryption `ssl`.

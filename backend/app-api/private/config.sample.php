@@ -12,11 +12,11 @@
  */
 return [
     // Every enquiry from the app is delivered here. This is the ONLY place the recipient is set.
-    'recipient_email' => 'vikas.kumar617@gmail.com',
+    'recipient_email' => 'info@foodtruckcentre.com.au',
     'recipient_name'  => 'Food Truck Centre',
 
     // Email address shown on the app's Contact screen ("Email us" button). Leave empty to hide the button.
-    'public_contact_email' => 'vikas.kumar617@gmail.com',
+    'public_contact_email' => 'info@foodtruckcentre.com.au',
 
     // Outgoing mail. driver: "smtp" (recommended), "mail" (PHP mail(), not recommended), "log" (testing only – nothing is sent).
     'mail' => [

@@ -68,7 +68,7 @@ Earlier runs showed failures that turned out to be test-script problems: a secti
 
 ## Not tested yet (needs your action)
 
-- **Real email delivery** from the app to `vikas.kumar617@gmail.com`. This needs the backend uploaded to your hosting with your SMTP password ([DEPLOYMENT.md](DEPLOYMENT.md)). Until then, the app's forms correctly report that sending failed.
+- **Real email delivery** from the app. (Update 25 Nov 2026: enquiries now go to `info@foodtruckcentre.com.au` via the WordPress plugin; see wordpress-plugin/.)
 - **A successful submission and the Success screen on a device** (depends on the above).
 - **Physical phones and small screens.** Please install the APK on your own Android phone.
 - The date and time pickers were exercised by code review and unit tests of the date rules, not by automated taps.

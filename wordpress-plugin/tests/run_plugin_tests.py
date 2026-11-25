@@ -56,13 +56,13 @@ srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{PORT}', ROUTER], cwd=os.path.d
 time.sleep(1.5)
 try:
     for base in ['/app-api/v1/app-config.php', '/wp-json/ftc/v1/app-config']:
-        s, b = req(base); check(f'config {base}', s == 200 and b.get('ok') and b.get('contact_email') == 'vikas.kumar617@gmail.com', (s, b))
+        s, b = req(base); check(f'config {base}', s == 200 and b.get('ok') and b.get('contact_email') == 'info@foodtruckcentre.com.au', (s, b))
 
     s, b = req('/app-api/v1/quote.php', quote()); check('valid quote accepted (APK URL)', s == 200 and b.get('ok') and b.get('enquiry_id', '').startswith('FTC-'), (s, b))
     ref = b.get('enquiry_id', '')
     check('enquiry_id is route-safe', ref and all(c.isalnum() or c == '-' for c in ref), ref)
     m = last_mail()
-    check('quote emailed to configured recipient', m.get('to') == 'vikas.kumar617@gmail.com', m.get('to'))
+    check('quote emailed to configured recipient', m.get('to') == 'info@foodtruckcentre.com.au', m.get('to'))
     exp = (datetime.date.today() + datetime.timedelta(days=30)).strftime('%a %-d %b %Y')
     check('subject format', m.get('subject') == f'New Food Truck Catering Enquiry – Jane Citizen – {exp}', m.get('subject'))
     html = m.get('message', '')
@@ -104,7 +104,7 @@ try:
     check('SQL injection attempt stored as plain text, users table intact', s == 200 and users == '1', (s, b, users))
 
     s, b = req('/app-api/v1/contact.php', contact()); m = last_mail()
-    check('contact message delivered', s == 200 and m.get('to') == 'vikas.kumar617@gmail.com' and 'Sam Lee' in m.get('message', ''), (s, b))
+    check('contact message delivered', s == 200 and m.get('to') == 'info@foodtruckcentre.com.au' and 'Sam Lee' in m.get('message', ''), (s, b))
     s, b = req('/app-api/v1/contact.php', contact(message='')); check('contact requires message', s == 422 and 'message' in b.get('fields', {}), b)
     s, b = req('/app-api/v1/contact.php', contact(topic='Hack')); check('contact rejects unknown topic', s == 422, b)
     s, b = req('/app-api/v1/contact.php', contact(topic='App support', device='Pixel 8')); check('app support delivered with device', s == 200 and 'Pixel 8' in last_mail().get('message', ''), b)

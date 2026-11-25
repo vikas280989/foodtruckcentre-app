@@ -48,10 +48,10 @@ def outbox(storage): return sorted(glob.glob(os.path.join(storage, 'outbox', '*.
 
 p, st, port = start()
 try:
-    s, b = req(port, '/v1/app-config.php'); check('config endpoint returns contact email', s == 200 and b.get('contact_email') == 'vikas.kumar617@gmail.com', b)
+    s, b = req(port, '/v1/app-config.php'); check('config endpoint returns contact email', s == 200 and b.get('contact_email') == 'info@foodtruckcentre.com.au', b)
     s, b = req(port, '/v1/quote.php', quote()); check('valid quote accepted', s == 200 and b.get('ok') and b['enquiry_id'].startswith('FTC-'), (s, b))
     mails = outbox(st); m = json.load(open(mails[-1])) if mails else {}
-    check('quote email sent to configured recipient', m.get('to') == 'vikas.kumar617@gmail.com', m.get('to'))
+    check('quote email sent to configured recipient', m.get('to') == 'info@foodtruckcentre.com.au', m.get('to'))
     exp_date = (datetime.date.today() + datetime.timedelta(days=30)).strftime('%a %-d %b %Y')
     check('subject format', m.get('subject') == f'New Food Truck Catering Enquiry – Jane Citizen – {exp_date}', m.get('subject'))
     check('HTML escapes user input (XSS)', '<script>' not in m.get('html', '') and '&lt;script&gt;' in m.get('html', ''))
@@ -89,7 +89,7 @@ try:
     check('SQL-like input handled as plain text (no DB used)', s == 200, (s, b))
 
     s, b = req(port, '/v1/contact.php', contact()); m = json.load(open(outbox(st)[-1]))
-    check('contact message delivered', s == 200 and b.get('ok') and m['to'] == 'vikas.kumar617@gmail.com' and 'Sam Lee' in m['html'], (s, b))
+    check('contact message delivered', s == 200 and b.get('ok') and m['to'] == 'info@foodtruckcentre.com.au' and 'Sam Lee' in m['html'], (s, b))
     s, b = req(port, '/v1/contact.php', contact(message='')); check('contact requires message', s == 422 and 'message' in b['fields'], b)
     s, b = req(port, '/v1/contact.php', contact(topic='Hack')); check('contact rejects unknown topic', s == 422, b)
     s, b = req(port, '/v1/contact.php', contact(topic='App support', app_version='1.0.0', device='Pixel 8')); check('app support enquiry delivered', s == 200, b)
