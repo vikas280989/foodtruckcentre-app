@@ -27,7 +27,8 @@ import java.util.concurrent.TimeUnit
 sealed interface ApiResult<out T> {
     data class Success<T>(val value: T) : ApiResult<T>
     data class Invalid(val message: String, val fields: Map<String, String>) : ApiResult<Nothing>
-    data class Failure(val message: String, val offline: Boolean = false) : ApiResult<Nothing>
+    /** unauthorized = the session is no longer valid; the app returns to the login screen. */
+    data class Failure(val message: String, val offline: Boolean = false, val unauthorized: Boolean = false) : ApiResult<Nothing>
 }
 
 @Serializable
@@ -79,10 +80,35 @@ private data class AppConfigResponse(
     @SerialName("contact_email") val contactEmail: String? = null,
 )
 
+@Serializable
+data class MyEnquiry(
+    @SerialName("enquiry_id") val enquiryId: String,
+    val type: String,
+    val title: String,
+    val summary: String = "",
+    @SerialName("event_date") val eventDate: String? = null,
+    @SerialName("submitted_at") val submittedAt: String,
+    val stage: String,
+    @SerialName("stage_label") val stageLabel: String,
+    val delivered: Boolean = true,
+)
+
+@Serializable
+private data class AuthResponse(
+    val ok: Boolean = false,
+    val token: String? = null,
+    val profile: Profile? = null,
+    val message: String? = null,
+    val fields: Map<String, String> = emptyMap(),
+    val enquiries: List<MyEnquiry>? = null,
+)
+
 /** A page from the WordPress site (via its public REST API). */
 data class WebPage(val title: String, val html: String, val modified: String, val fromCache: Boolean)
 
 class Api private constructor(context: Context) {
+
+    private val sessions = SessionStore.get(context)
 
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
@@ -106,6 +132,100 @@ class Api private constructor(context: Context) {
 
     suspend fun submitContact(request: ContactRequest): ApiResult<String> =
         post("contact.php", json.encodeToString(ContactRequest.serializer(), request))
+
+    /* ---------- Customer accounts ---------- */
+
+    suspend fun register(name: String, email: String, phone: String, password: String): ApiResult<Session> =
+        authCall("auth-register.php", buildBody("name" to name, "email" to email, "phone" to phone, "password" to password, "website" to "")).toSession()
+
+    suspend fun login(email: String, password: String): ApiResult<Session> =
+        authCall("auth-login.php", buildBody("email" to email, "password" to password)).toSession()
+
+    suspend fun forgotPassword(email: String): ApiResult<String> =
+        when (val r = authCall("auth-forgot.php", buildBody("email" to email))) {
+            is ApiResult.Success -> ApiResult.Success(r.value.message ?: "Check your email for a reset link.")
+            is ApiResult.Invalid -> r
+            is ApiResult.Failure -> r
+        }
+
+    /** Ends the session on the server (best effort) and on the device. */
+    suspend fun logout() {
+        if (sessions.token != null) authCall("auth-logout.php", "{}")
+        sessions.clear()
+    }
+
+    suspend fun refreshProfile(): ApiResult<Profile> =
+        when (val r = authCall("me.php", null)) {
+            is ApiResult.Success -> r.value.profile?.let { sessions.updateProfile(it); ApiResult.Success(it) }
+                ?: ApiResult.Failure("Something went wrong. Please try again.")
+            is ApiResult.Invalid -> r
+            is ApiResult.Failure -> r
+        }
+
+    suspend fun updateProfile(name: String, phone: String): ApiResult<Profile> =
+        when (val r = authCall("me.php", buildBody("name" to name, "phone" to phone))) {
+            is ApiResult.Success -> r.value.profile?.let { sessions.updateProfile(it); ApiResult.Success(it) }
+                ?: ApiResult.Failure("Something went wrong. Please try again.")
+            is ApiResult.Invalid -> r
+            is ApiResult.Failure -> r
+        }
+
+    suspend fun deleteAccount(password: String): ApiResult<Unit> =
+        when (val r = authCall("me-delete.php", buildBody("password" to password))) {
+            is ApiResult.Success -> { sessions.clear(); ApiResult.Success(Unit) }
+            is ApiResult.Invalid -> r
+            is ApiResult.Failure -> r
+        }
+
+    suspend fun myEnquiries(): ApiResult<List<MyEnquiry>> =
+        when (val r = authCall("my-enquiries.php", null)) {
+            is ApiResult.Success -> ApiResult.Success(r.value.enquiries.orEmpty())
+            is ApiResult.Invalid -> r
+            is ApiResult.Failure -> r
+        }
+
+    private fun buildBody(vararg pairs: Pair<String, String>): String =
+        json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(),
+            kotlinx.serialization.json.JsonObject(pairs.associate { (k, v) -> k to JsonPrimitive(v) }))
+
+    private fun ApiResult<AuthResponse>.toSession(): ApiResult<Session> = when (this) {
+        is ApiResult.Success -> {
+            val t = value.token
+            val p = value.profile
+            if (t != null && p != null) Session(t, p).also { sessions.save(it) }.let { ApiResult.Success(it) }
+            else ApiResult.Failure("Something went wrong. Please try again.")
+        }
+        is ApiResult.Invalid -> this
+        is ApiResult.Failure -> this
+    }
+
+    /** GET when body is null, otherwise POST JSON. Sends the session token when logged in. */
+    private suspend fun authCall(path: String, body: String?): ApiResult<AuthResponse> = withContext(Dispatchers.IO) {
+        try {
+            val builder = Request.Builder()
+                .url(BuildConfig.API_BASE_URL + path)
+                .header("User-Agent", userAgent)
+                .header("Accept", "application/json")
+                .cacheControl(CacheControl.FORCE_NETWORK)
+            sessions.token?.let { builder.header("X-FTC-Token", it) }
+            if (body != null) builder.post(body.toRequestBody(jsonType))
+            client.newCall(builder.build()).execute().use { resp ->
+                val parsed = runCatching { json.decodeFromString(AuthResponse.serializer(), resp.body?.string().orEmpty()) }.getOrNull()
+                when {
+                    resp.isSuccessful && parsed?.ok == true -> ApiResult.Success(parsed)
+                    resp.code == 401 && path != "auth-login.php" -> {
+                        sessions.clear()
+                        ApiResult.Failure(parsed?.message ?: "Your session has ended. Please log in again.", unauthorized = true)
+                    }
+                    resp.code == 422 && parsed != null -> ApiResult.Invalid(parsed.message ?: "Please check the highlighted fields.", parsed.fields)
+                    parsed?.message != null && resp.code in 400..599 -> ApiResult.Failure(parsed.message)
+                    else -> ApiResult.Failure("Something went wrong. Please try again in a moment.")
+                }
+            }
+        } catch (e: Exception) {
+            networkFailure(e)
+        }
+    }
 
     /** Public business contact email configured on the server (null = hide the button). */
     suspend fun contactEmail(): String? = withContext(Dispatchers.IO) {
@@ -158,6 +278,7 @@ class Api private constructor(context: Context) {
                 .header("User-Agent", userAgent)
                 .header("Accept", "application/json")
                 .cacheControl(CacheControl.FORCE_NETWORK)
+                .apply { sessions.token?.let { header("X-FTC-Token", it) } }
                 .post(body.toRequestBody(jsonType))
                 .build()
             client.newCall(req).execute().use { resp ->
@@ -166,6 +287,10 @@ class Api private constructor(context: Context) {
                 when {
                     resp.isSuccessful && parsed?.ok == true && !parsed.enquiryId.isNullOrBlank() ->
                         ApiResult.Success(parsed.enquiryId)
+                    resp.code == 401 -> {
+                        sessions.clear()
+                        ApiResult.Failure("Your session has ended. Please log in again.", unauthorized = true)
+                    }
                     resp.code == 422 && parsed != null ->
                         ApiResult.Invalid(parsed.message ?: "Please check the highlighted fields.", parsed.fields)
                     resp.code == 429 ->

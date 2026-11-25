@@ -89,11 +89,11 @@ function ftc_app_new_enquiry_ref(): string
  * Sliding-window rate limit per client IP, kept in transients (no extra tables).
  * Returns true when the request may continue.
  */
-function ftc_app_rate_limit_ok(): bool
+function ftc_app_rate_limit_ok(string $bucket = 'submit', ?int $per10 = null, ?int $perDay = null): bool
 {
-    $per10 = max(1, (int) get_option('ftc_app_rate_10min', 5));
-    $perDay = max(1, (int) get_option('ftc_app_rate_day', 20));
-    $key = 'ftc_app_rl_' . substr(hash('sha256', 'submit|' . ftc_app_client_ip() . '|' . wp_salt('nonce')), 0, 32);
+    $per10 = max(1, $per10 ?? (int) get_option('ftc_app_rate_10min', 5));
+    $perDay = max(1, $perDay ?? (int) get_option('ftc_app_rate_day', 20));
+    $key = 'ftc_app_rl_' . substr(hash('sha256', $bucket . '|' . ftc_app_client_ip() . '|' . wp_salt('nonce')), 0, 32);
     $now = time();
     $hits = get_transient($key);
     $hits = is_array($hits) ? array_values(array_filter($hits, fn($t) => is_int($t) && $t > $now - DAY_IN_SECONDS)) : [];

@@ -40,6 +40,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -61,6 +63,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import au.com.foodtruckcentre.app.data.SiteContent
 import au.com.foodtruckcentre.app.ui.screens.AboutScreen
+import au.com.foodtruckcentre.app.ui.screens.AccountScreen
+import au.com.foodtruckcentre.app.ui.screens.AuthScreen
+import au.com.foodtruckcentre.app.ui.screens.AuthViewModel
+import au.com.foodtruckcentre.app.ui.screens.ForgotPasswordScreen
 import au.com.foodtruckcentre.app.ui.screens.ContactScreen
 import au.com.foodtruckcentre.app.ui.screens.ContactViewModel
 import au.com.foodtruckcentre.app.ui.screens.ContentViewModel
@@ -84,6 +90,9 @@ private object Routes {
     const val ABOUT = "about"
     const val LEGAL = "legal/{slug}"
     const val SUCCESS = "success/{id}?name={name}"
+    const val AUTH = "auth"
+    const val FORGOT = "forgot"
+    const val ACCOUNT = "account"
     fun legal(page: SiteContent.LegalPage) = "legal/${page.slug}"
 }
 
@@ -105,6 +114,8 @@ fun FtcApp() {
     val quoteVm: QuoteViewModel = viewModel(owner)
     val contactVm: ContactViewModel = viewModel(owner)
     val contentVm: ContentViewModel = viewModel(owner)
+    val authVm: AuthViewModel = viewModel(owner)
+    val session by authVm.sessions.session.collectAsState()
 
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
@@ -124,6 +135,20 @@ fun FtcApp() {
     }
 
     fun openLegal(page: SiteContent.LegalPage) = nav.navigate(Routes.legal(page))
+    fun openAccount() = nav.navigate(Routes.ACCOUNT) { launchSingleTop = true }
+    fun goHomeAfterLogin() = nav.navigate(Routes.HOME) { popUpTo(nav.graph.id) { inclusive = true } }
+    fun goToLogin() = nav.navigate(Routes.AUTH) { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
+
+    // Login is required: whenever the session ends (logout, deleted account, expired token), return to the login screen.
+    val publicRoutes = setOf(Routes.INTRO, Routes.AUTH, Routes.FORGOT, Routes.LEGAL)
+    LaunchedEffect(session == null, current) {
+        if (session == null) {
+            // Never show one customer's typed details to the next person who logs in on this phone.
+            quoteVm.clearForm()
+            contactVm.clearForm()
+            if (current != null && current !in publicRoutes) goToLogin()
+        }
+    }
     fun back(): Unit { if (!nav.popBackStack()) openTab(Routes.HOME) }
 
     Box(Modifier.fillMaxSize().background(Ftc.Cream)) {
@@ -137,8 +162,25 @@ fun FtcApp() {
         ) {
             composable(Routes.INTRO, enterTransition = { fadeIn() }, exitTransition = { fadeOut() }) {
                 IntroScreen(onDone = {
-                    nav.navigate(Routes.HOME) { popUpTo(Routes.INTRO) { inclusive = true } }
+                    nav.navigate(if (authVm.sessions.session.value != null) Routes.HOME else Routes.AUTH) {
+                        popUpTo(Routes.INTRO) { inclusive = true }
+                    }
                 })
+            }
+            composable(Routes.AUTH) {
+                AuthScreen(authVm, onLoggedIn = ::goHomeAfterLogin, onForgot = { nav.navigate(Routes.FORGOT) }, onLegal = ::openLegal)
+            }
+            composable(Routes.FORGOT) {
+                ForgotPasswordScreen(authVm, onBack = ::back)
+            }
+            composable(Routes.ACCOUNT) {
+                AccountScreen(
+                    authVm,
+                    onBack = ::back,
+                    onNewQuote = { openQuote() },
+                    onLegal = ::openLegal,
+                    onLoggedOut = ::goToLogin,
+                )
             }
             composable(Routes.HOME) {
                 HomeScreen(
@@ -150,12 +192,14 @@ fun FtcApp() {
                     onContact = { openTab(Routes.CONTACT) },
                     onAbout = { nav.navigate(Routes.ABOUT) },
                     onLegal = ::openLegal,
+                    onAccount = ::openAccount,
                 )
             }
             composable(Routes.SERVICES) {
-                ServicesScreen(onQuote = { s -> openQuote(eventType = s.presetEventType) }, onBack = null)
+                ServicesScreen(onQuote = { s -> openQuote(eventType = s.presetEventType) }, onBack = null, onAccount = ::openAccount)
             }
             composable(Routes.QUOTE) {
+                LaunchedEffect(session) { quoteVm.fillFromProfile(session?.profile) }
                 QuoteScreen(
                     vm = quoteVm,
                     onSuccess = { s ->
@@ -165,13 +209,15 @@ fun FtcApp() {
                     },
                     onOpenLegal = ::openLegal,
                     onBack = null,
+                    onAccount = ::openAccount,
                 )
             }
             composable(Routes.FEATURING) {
-                FeaturingScreen(contentVm, onQuote = { c -> openQuote(cuisine = c) }, onBack = null)
+                FeaturingScreen(contentVm, onQuote = { c -> openQuote(cuisine = c) }, onBack = null, onAccount = ::openAccount)
             }
             composable(Routes.CONTACT) {
-                ContactScreen(contactVm, contentVm, onLegal = ::openLegal, onBack = null)
+                LaunchedEffect(session) { contactVm.fillFromProfile(session?.profile) }
+                ContactScreen(contactVm, contentVm, onLegal = ::openLegal, onBack = null, onAccount = ::openAccount)
             }
             composable(Routes.ABOUT) {
                 AboutScreen(onQuote = { openQuote() }, onLegal = ::openLegal, onBack = ::back)
@@ -194,6 +240,7 @@ fun FtcApp() {
                     firstName = entry.arguments?.getString("name").orEmpty(),
                     onHome = { openTab(Routes.HOME) },
                     onAbout = { nav.navigate(Routes.ABOUT) },
+                    onMyEnquiries = ::openAccount,
                 )
             }
         }

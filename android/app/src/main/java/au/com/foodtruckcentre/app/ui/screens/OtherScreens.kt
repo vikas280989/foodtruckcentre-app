@@ -86,12 +86,13 @@ import kotlinx.coroutines.launch
 /* ---------------- Services ---------------- */
 
 @Composable
-fun ServicesScreen(onQuote: (SiteContent.Service) -> Unit, onBack: (() -> Unit)?) {
+fun ServicesScreen(onQuote: (SiteContent.Service) -> Unit, onBack: (() -> Unit)?, onAccount: (() -> Unit)? = null) {
     Column(Modifier.fillMaxSize().background(Ftc.Cream).verticalScroll(rememberScrollState())) {
         ScreenHeader(
             "Catering Services", eyebrow = "What we cater",
             subtitle = "Delicious and flexible food truck catering for corporate parties, weddings and other events.",
             onBack = onBack,
+            onAccount = onAccount,
         )
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             SiteContent.services.forEachIndexed { i, s ->
@@ -130,9 +131,9 @@ fun ServicesScreen(onQuote: (SiteContent.Service) -> Unit, onBack: (() -> Unit)?
 /* ---------------- Featuring ---------------- */
 
 @Composable
-fun FeaturingScreen(content: ContentViewModel, onQuote: (SiteContent.Cuisine?) -> Unit, onBack: (() -> Unit)?) {
+fun FeaturingScreen(content: ContentViewModel, onQuote: (SiteContent.Cuisine?) -> Unit, onBack: (() -> Unit)?, onAccount: (() -> Unit)? = null) {
     Column(Modifier.fillMaxSize().background(Ftc.Cream).verticalScroll(rememberScrollState())) {
-        ScreenHeader("Featuring", eyebrow = "This month", subtitle = "The food truck we're featuring right now, straight from our website.", onBack = onBack)
+        ScreenHeader("Featuring", eyebrow = "This month", subtitle = "The food truck we're featuring right now, straight from our website.", onBack = onBack, onAccount = onAccount)
         Column(Modifier.padding(18.dp)) {
             when (val state = content.featured) {
                 Loadable.Loading -> LoadingBlocks()
@@ -201,7 +202,7 @@ fun FeaturingScreen(content: ContentViewModel, onQuote: (SiteContent.Cuisine?) -
 /* ---------------- Contact ---------------- */
 
 @Composable
-fun ContactScreen(vm: ContactViewModel, content: ContentViewModel, onLegal: (SiteContent.LegalPage) -> Unit, onBack: (() -> Unit)?) {
+fun ContactScreen(vm: ContactViewModel, content: ContentViewModel, onLegal: (SiteContent.LegalPage) -> Unit, onBack: (() -> Unit)?, onAccount: (() -> Unit)? = null) {
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.touch(); content.refreshContactEmail() }
     Column(
@@ -213,6 +214,12 @@ fun ContactScreen(vm: ContactViewModel, content: ContentViewModel, onLegal: (Sit
                 modifier = Modifier.fillMaxWidth().height(250.dp),
             )
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Ftc.NavyDeep.copy(alpha = 0.55f), Ftc.NavyDeep.copy(alpha = 0.9f)))))
+            if (onAccount != null) {
+                au.com.foodtruckcentre.app.ui.components.AccountButton(
+                    onAccount,
+                    Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.statusBars).padding(14.dp),
+                )
+            }
             Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(start = 22.dp, end = 22.dp, top = 60.dp)) {
                 Text("GET IN TOUCH", style = MaterialTheme.typography.labelMedium, color = Ftc.Mustard)
                 Spacer(Modifier.height(6.dp))
@@ -431,7 +438,7 @@ fun SuccessBadge() {
 }
 
 @Composable
-fun SuccessScreen(enquiryId: String, firstName: String, onHome: () -> Unit, onAbout: () -> Unit) {
+fun SuccessScreen(enquiryId: String, firstName: String, onHome: () -> Unit, onAbout: () -> Unit, onMyEnquiries: (() -> Unit)? = null) {
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) { delay(200); reveal.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
     Box(
@@ -474,11 +481,15 @@ fun SuccessScreen(enquiryId: String, firstName: String, onHome: () -> Unit, onAb
                 Spacer(Modifier.height(18.dp))
                 Text("What happens next", style = MaterialTheme.typography.titleMedium, color = Ftc.Navy)
                 Spacer(Modifier.height(10.dp))
-                NextStep("1", "We review your event details.")
+                NextStep("1", "We review your event details. You can follow progress under My account → My enquiries.")
                 NextStep("2", "You'll be contacted by email or phone with quotes and menus from suitable food trucks.")
                 NextStep("3", "Your booking is confirmed only once you accept a vendor's quote.")
                 Spacer(Modifier.height(22.dp))
                 PrimaryButton("Back to Home", onHome, modifier = Modifier.fillMaxWidth())
+                if (onMyEnquiries != null) {
+                    Spacer(Modifier.height(10.dp))
+                    SecondaryButton("View my enquiries", onMyEnquiries, modifier = Modifier.fillMaxWidth())
+                }
                 Spacer(Modifier.height(10.dp))
                 SecondaryButton("How booking works", onAbout, modifier = Modifier.fillMaxWidth())
             }

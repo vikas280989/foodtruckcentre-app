@@ -38,7 +38,14 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -276,7 +283,9 @@ fun FtcTextField(
     maxLength: Int = 200,
     leadingIcon: ImageVector? = null,
     autofill: String? = null,
+    isPassword: Boolean = false,
 ) {
+    var showPassword by remember { mutableStateOf(false) }
     Column(modifier) {
         OutlinedTextField(
             value = value,
@@ -285,9 +294,21 @@ fun FtcTextField(
             placeholder = placeholder?.let { { Text(it, color = Ftc.Muted.copy(alpha = 0.7f)) } },
             leadingIcon = leadingIcon?.let { { Icon(it, null, tint = if (error != null) Ftc.Error else Ftc.Navy.copy(alpha = 0.7f)) } },
             isError = error != null,
+            visualTransformation = if (isPassword && !showPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            trailingIcon = if (isPassword) {
+                {
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Icon(
+                            if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = if (showPassword) "Hide password" else "Show password",
+                            tint = Ftc.Muted,
+                        )
+                    }
+                }
+            } else null,
             singleLine = singleLine,
             minLines = minLines,
-            keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = keyboardType, imeAction = imeAction, autoCorrectEnabled = keyboardType == KeyboardType.Text && !singleLine),
+            keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = if (isPassword) KeyboardType.Password else keyboardType, imeAction = imeAction, autoCorrectEnabled = keyboardType == KeyboardType.Text && !singleLine && !isPassword),
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Ftc.Navy,

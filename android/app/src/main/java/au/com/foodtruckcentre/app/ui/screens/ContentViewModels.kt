@@ -135,6 +135,17 @@ class ContactViewModel(app: Application) : AndroidViewModel(app) {
         if (startedAt == 0L) startedAt = System.currentTimeMillis()
     }
 
+    fun fillFromProfile(p: au.com.foodtruckcentre.app.data.Profile?) {
+        if (p == null) return
+        if (name.isBlank()) name = p.name
+        if (email.isBlank()) email = p.email
+    }
+
+    fun clearForm() {
+        name = ""; email = ""; message = ""; topic = topics.first(); errors.clear(); banner = null; sentId = null
+        submissionId = UUID.randomUUID().toString(); startedAt = 0L
+    }
+
     fun submit() {
         if (submitting) return
         banner = null

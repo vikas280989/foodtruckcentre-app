@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +59,7 @@ fun ScreenHeader(
     eyebrow: String? = null,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    onAccount: (() -> Unit)? = null,
 ) {
     Box(
         modifier
@@ -73,7 +75,7 @@ fun ScreenHeader(
             .padding(start = 8.dp, end = 20.dp, top = 6.dp, bottom = 26.dp),
     ) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (onBack != null) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -84,6 +86,10 @@ fun ScreenHeader(
                         painterResource(R.drawable.logo_badge), contentDescription = "Food Truck Centre",
                         modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.White).padding(2.dp),
                     )
+                }
+                if (onAccount != null) {
+                    Spacer(Modifier.weight(1f))
+                    AccountButton(onAccount)
                 }
             }
             Column(Modifier.padding(start = 12.dp, top = 10.dp)) {
@@ -98,6 +104,17 @@ fun ScreenHeader(
                 }
             }
         }
+    }
+}
+
+/** Round "My account" button used in headers. */
+@Composable
+fun AccountButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
+    ) {
+        Icon(Icons.Rounded.AccountCircle, contentDescription = "My account", tint = Color.White, modifier = Modifier.size(28.dp))
     }
 }
 

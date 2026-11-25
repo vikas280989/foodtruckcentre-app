@@ -15,10 +15,13 @@ def wpcli(code):
     return subprocess.run(['php', os.environ.get('WP_CLI', '/tmp/wpt/wp-cli.phar'), '--allow-root', 'eval', code],
                           cwd=WP, capture_output=True, text=True).stdout.strip()
 
-def req(path, body=None, method=None, ctype='application/json', raw=None):
+TOKEN = {'v': ''}
+def req(path, body=None, method=None, ctype='application/json', raw=None, token=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
     r = urllib.request.Request(f'http://127.0.0.1:{PORT}{path}', data=data, method=method or ('POST' if data is not None else 'GET'))
     if data is not None: r.add_header('Content-Type', ctype)
+    tok = TOKEN['v'] if token is None else token
+    if tok: r.add_header('X-FTC-Token', tok)
     try:
         resp = opener.open(r, timeout=30); t = resp.read()
         try: return resp.status, json.loads(t or b'{}')
@@ -46,17 +49,54 @@ def contact(**o):
 def check(name, cond, detail=''):
     results.append((name, bool(cond))); print(('PASS ' if cond else 'FAIL ') + name + ('' if cond else f'  -> {detail}'))
 
+def reset_rate_limits():
+    wpcli('global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%ftc_app_rl_%\'");')
+
 def outbox(): return sorted(glob.glob(os.path.join(OUTBOX, '*.json')), key=os.path.getmtime)
 def last_mail(): f = outbox(); return json.load(open(f[-1])) if f else {}
 
 for f in glob.glob(os.path.join(OUTBOX, '*')): os.remove(f)
-wpcli('global $wpdb; $wpdb->query("DELETE FROM ".ftc_app_table()); global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%ftc_app_rl_%\'"); update_option("ftc_app_rate_10min", 1000); update_option("ftc_app_rate_day", 5000);')
+wpcli('require_once ABSPATH."wp-admin/includes/user.php"; foreach (get_users(["role"=>"ftc_customer"]) as $u) wp_delete_user($u->ID); global $wpdb; $wpdb->query("DELETE FROM ".ftc_app_tokens_table()); $wpdb->query("DELETE FROM ".ftc_app_table()); global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%ftc_app_rl_%\'"); update_option("ftc_app_rate_10min", 1000); update_option("ftc_app_rate_day", 5000);')
 env = dict(os.environ); env.pop('HTTPS_PROXY', None)
 srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{PORT}', ROUTER], cwd=os.path.dirname(ROUTER), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1.5)
 try:
     for base in ['/app-api/v1/app-config.php', '/wp-json/ftc/v1/app-config']:
         s, b = req(base); check(f'config {base}', s == 200 and b.get('ok') and b.get('contact_email') == 'info@foodtruckcentre.com.au', (s, b))
+
+    # ---------- Accounts ----------
+    s, b = req('/app-api/v1/quote.php', quote(), token=''); check('quote without login refused (401, update message)', s == 401 and b.get('error') == 'login_required' and 'update' in b.get('message', ''), (s, b))
+    s, b = req('/app-api/v1/contact.php', contact(), token=''); check('contact without login refused', s == 401, (s, b))
+    s, b = req('/app-api/v1/my-enquiries.php', token=''); check('my-enquiries without login refused', s == 401, (s, b))
+    reg = {'name': 'Jane Citizen', 'email': 'Jane@Example.com', 'phone': '0412 345 678', 'password': 'Secret123'}
+    for label, over, field in [('short password', {'password': 'abc1'}, 'password'), ('password without number', {'password': 'abcdefgh'}, 'password'),
+                               ('bad email', {'email': 'x'}, 'email'), ('bad phone', {'phone': '1'}, 'phone'), ('empty name', {'name': ''}, 'name')]:
+        s, b = req('/app-api/v1/auth-register.php', dict(reg, **over), token=''); check(f'register rejects {label}', s == 422 and field in b.get('fields', {}), (s, b))
+    reset_rate_limits()
+    s, b = req('/app-api/v1/auth-register.php', reg, token='')
+    check('register creates account and returns token + profile', s == 200 and len(b.get('token', '')) == 64 and b.get('profile', {}).get('email') == 'jane@example.com' and b['profile'].get('phone') == '0412 345 678', (s, b))
+    TOKEN['v'] = b.get('token', '')
+    role = wpcli('$u = get_user_by("email","jane@example.com"); echo implode(",", $u->roles), "|", user_can($u, "edit_posts") ? "can-edit" : "no-edit";')
+    check('account is a WordPress user with Customer role only (no editing rights)', role == 'ftc_customer|no-edit', role)
+    stored = wpcli('global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM ".ftc_app_tokens_table()." WHERE token_hash = \'" . hash("sha256", "' + TOKEN['v'] + '") . "\'"), "|", $wpdb->get_var("SELECT COUNT(*) FROM ".ftc_app_tokens_table()." WHERE token_hash = \'' + TOKEN['v'] + '\'");')
+    check('only the hash of the token is stored', stored == '1|0', stored)
+    s, b = req('/app-api/v1/auth-register.php', reg, token=''); check('duplicate email refused', s == 422 and 'already exists' in b.get('fields', {}).get('email', ''), (s, b))
+    s, b = req('/app-api/v1/auth-login.php', {'email': 'jane@example.com', 'password': 'Wrong1234'}, token=''); check('wrong password refused with generic message', s == 401 and b.get('message') == 'Email or password is incorrect.', (s, b))
+    s, b = req('/app-api/v1/auth-login.php', {'email': 'nobody@example.com', 'password': 'Wrong1234'}, token=''); check('unknown email gives the same message', s == 401 and b.get('message') == 'Email or password is incorrect.', (s, b))
+    s, b = req('/app-api/v1/auth-login.php', {'email': 'JANE@example.com', 'password': 'Secret123'}, token=''); check('login works (email case-insensitive)', s == 200 and len(b.get('token', '')) == 64, (s, b))
+    login_token = b.get('token', '')
+    s, b = req('/app-api/v1/me.php'); check('me returns profile', s == 200 and b.get('profile', {}).get('name') == 'Jane Citizen', (s, b))
+    s, b = req('/app-api/v1/me.php', {'name': 'Jane Q Citizen', 'phone': '0499 000 111'}); check('profile update', s == 200 and b['profile']['name'] == 'Jane Q Citizen' and b['profile']['phone'] == '0499 000 111', (s, b))
+    req('/app-api/v1/me.php', {'name': 'Jane Citizen', 'phone': '0412 345 678'})
+    s, b = req('/app-api/v1/me.php', {'name': '', 'phone': 'x'}); check('profile update validated', s == 422, (s, b))
+    s, b = req('/app-api/v1/auth-logout.php', {}, token=login_token); s2, b2 = req('/app-api/v1/me.php', token=login_token)
+    check('logout invalidates that session only', s == 200 and s2 == 401 and req('/app-api/v1/me.php')[0] == 200, (s, s2))
+    s, b = req('/app-api/v1/auth-forgot.php', {'email': 'jane@example.com'}, token=''); fm = last_mail()
+    check('forgot password sends WordPress reset email', s == 200 and fm.get('to') == 'jane@example.com' and 'wp-login.php?' in fm.get('message', '') and 'rp' in fm.get('message', ''), (s, b, fm.get('subject')))
+    n = len(outbox()); s, b = req('/app-api/v1/auth-forgot.php', {'email': 'nobody@example.com'}, token='')
+    check('forgot password gives the same answer for unknown emails, sends nothing', s == 200 and len(outbox()) == n, (s, b))
+    admin_try = wpcli('$u=get_user_by("email","jane@example.com"); echo user_can($u,"manage_options") ? "admin" : "customer";')
+    check('customer cannot manage the site', admin_try == 'customer', admin_try)
 
     s, b = req('/app-api/v1/quote.php', quote()); check('valid quote accepted (APK URL)', s == 200 and b.get('ok') and b.get('enquiry_id', '').startswith('FTC-'), (s, b))
     ref = b.get('enquiry_id', '')
@@ -72,6 +112,15 @@ try:
     check('reply-to is customer, HTML content type', 'Reply-To: "Jane Citizen" <jane@example.com>' in hdrs and 'text/html' in hdrs, hdrs)
     stored = wpcli(f'global $wpdb; echo $wpdb->get_var($wpdb->prepare("SELECT status FROM ".ftc_app_table()." WHERE enquiry_ref=%s", "{ref}"));')
     check('enquiry stored in WordPress as sent', stored == 'sent', stored)
+
+    linked = wpcli(f'global $wpdb; $u=get_user_by("email","jane@example.com"); echo $wpdb->get_var($wpdb->prepare("SELECT user_id FROM ".ftc_app_table()." WHERE enquiry_ref=%s", "{ref}")) == $u->ID ? "linked" : "no";')
+    check('enquiry linked to the customer account', linked == 'linked', linked)
+    s, b = req('/app-api/v1/my-enquiries.php'); items = b.get('enquiries', [])
+    check('my-enquiries lists it with stage New', s == 200 and items and items[0]['enquiry_id'] == ref and items[0]['stage'] == 'new' and items[0]['stage_label'] == 'New' and 'Office Celebration' in items[0]['summary'], (s, b))
+    wpcli(f'global $wpdb; $wpdb->update(ftc_app_table(), ["stage"=>"quoted"], ["enquiry_ref"=>"{ref}"]);')
+    s, b = req('/app-api/v1/my-enquiries.php'); check('stage set by admin is shown to the customer', b.get('enquiries', [{}])[0].get('stage_label') == 'Quoted', b)
+    s, b = req('/app-api/v1/auth-register.php', {'name': 'Other Person', 'email': 'other@example.com', 'phone': '0400 111 222', 'password': 'Other1234'}, token='')
+    s, b = req('/app-api/v1/my-enquiries.php', token=b.get('token')); check("customers can't see each other's enquiries", s == 200 and b.get('enquiries') == [], (s, b))
 
     s, b = req('/wp-json/ftc/v1/quote', quote(name='Rest Route', email='rest@example.com')); check('valid quote accepted (REST URL)', s == 200 and b.get('ok'), (s, b))
 
@@ -99,9 +148,10 @@ try:
     s, b = req('/app-api/v1/quote.php', raw=b'name=x', ctype='application/x-www-form-urlencoded'); check('non-JSON rejected', s == 415, s)
     s, b = req('/app-api/v1/quote.php', raw=b'[1,2]'); check('JSON array rejected', s == 400, s)
     s, b = req('/app-api/v1/quote.php', raw=json.dumps(quote(additional_info='x' * 20000)).encode()); check('oversized body rejected', s == 413, s)
+    users_before = wpcli('echo count_users()["total_users"];')
     s, b = req('/app-api/v1/quote.php', quote(name="Robert'); DROP TABLE wp_users;--", email='bob@example.com', phone='0400000000'))
     users = wpcli('echo count_users()["total_users"];')
-    check('SQL injection attempt stored as plain text, users table intact', s == 200 and users == '1', (s, b, users))
+    check('SQL injection attempt stored as plain text, users table intact', s == 200 and users == users_before and users != '', (s, b, users_before, users))
 
     s, b = req('/app-api/v1/contact.php', contact()); m = last_mail()
     check('contact message delivered', s == 200 and m.get('to') == 'info@foodtruckcentre.com.au' and 'Sam Lee' in m.get('message', ''), (s, b))
@@ -131,6 +181,15 @@ try:
     codes = [req('/app-api/v1/contact.php', contact(message=f'rate limit message {i}'))[0] for i in range(5)]
     check('rate limit after 3 per 10 minutes', codes[:3] == [200, 200, 200] and codes[3:] == [429, 429], codes)
     wpcli('update_option("ftc_app_rate_10min", 5); update_option("ftc_app_rate_day", 20);')
+
+    reset_rate_limits()
+    for i in range(5): req('/app-api/v1/auth-login.php', {'email': 'other@example.com', 'password': f'Bad{i}xxxx1'}, token='')
+    s, b = req('/app-api/v1/auth-login.php', {'email': 'other@example.com', 'password': 'Other1234'}, token=''); check('account locked after 5 wrong passwords', s == 429 and b.get('error') == 'locked', (s, b))
+    s, b = req('/app-api/v1/me-delete.php', {'password': 'wrong'}); check('delete account needs the right password', s == 422, (s, b))
+    s, b = req('/app-api/v1/me-delete.php', {'password': 'Secret123'})
+    gone = wpcli('echo get_user_by("email","jane@example.com") ? "exists" : "deleted";')
+    kept = wpcli('global $wpdb; echo $wpdb->get_var("SELECT COUNT(*) FROM ".ftc_app_table()." WHERE name=\'Jane Citizen\' AND user_id=0");')
+    check('delete account removes the user and session, keeps enquiries unlinked', s == 200 and gone == 'deleted' and int(kept or 0) >= 1 and req('/app-api/v1/me.php')[0] == 401, (s, gone, kept))
 
     s, b = req('/app-api/v1/other.php'); check('other /app-api paths are left to WordPress (not handled by the plugin)', 'ok' not in b and 'error' not in b, (s, b))
 finally:

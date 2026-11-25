@@ -2,7 +2,7 @@ name: Build, test and verify Android APKs
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'dev/**']
   workflow_dispatch:
 
 permissions:
@@ -21,11 +21,17 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, openssl
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3
       - name: Lint PHP
         run: find backend -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Run API tests
+      - name: Run API tests (standalone backend)
         run: python3 backend/tests/run_tests.py
+      - name: Set up local WordPress with the FTC plugin
+        run: bash ci/setup_local_wp.sh "$RUNNER_TEMP/wp-test"
+      - name: Run WordPress plugin tests (accounts, enquiries, security)
+        env:
+          WP_CLI: ${{ runner.temp }}/wp-test/wp-cli.phar
+        run: python3 wordpress-plugin/tests/run_plugin_tests.py "$RUNNER_TEMP/wp-test/wp" "$RUNNER_TEMP/wp-test/router.php" "$RUNNER_TEMP/wp-test/outbox"
 
   build:
     name: Unit tests, lint, build & sign
@@ -102,6 +108,11 @@ jobs:
           VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Build test-only debug APK for the end-to-end test (points at the runner's local WordPress)
+        run: |
+          ./gradlew --no-daemon assembleDebug -PftcApiBase=http://10.0.2.2:8800/app-api/v1/
+          cp "$(ls app/build/outputs/apk/debug/*.apk | head -1)" ../release/FoodTruckCentre-e2e-debug.apk
+
       - name: Check for secrets or cleartext URLs inside the APK
         run: |
           cd ../release && mkdir -p x && cd x && unzip -q -o ../FoodTruckCentre.apk
@@ -125,6 +136,7 @@ jobs:
           path: |
             release/FoodTruckCentre.apk
             release/FoodTruckCentre-debug.apk
+            release/FoodTruckCentre-e2e-debug.apk
             release/SHA256SUMS.txt
             release/release-signature.txt
             release/release-manifest.txt
@@ -151,6 +163,15 @@ jobs:
         with:
           name: FoodTruckCentre-apks
           path: release
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3
+      - name: Start local test WordPress (reachable from the emulator at 10.0.2.2:8800)
+        run: |
+          bash ci/setup_local_wp.sh "$RUNNER_TEMP/wp-test"
+          cd "$RUNNER_TEMP/wp-test" && nohup php -S 0.0.0.0:8800 router.php > "$RUNNER_TEMP/wp-server.log" 2>&1 &
+          sleep 2 && curl -sf http://127.0.0.1:8800/app-api/v1/app-config.php
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -166,7 +187,7 @@ jobs:
           ram-size: 4096M
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: python3 ci/device_test.py release/FoodTruckCentre.apk release/FoodTruckCentre-debug.apk device-results
+          script: WP_DIR="$RUNNER_TEMP/wp-test/wp" WP_CLI="$RUNNER_TEMP/wp-test/wp-cli.phar" python3 ci/device_test.py release/FoodTruckCentre.apk release/FoodTruckCentre-e2e-debug.apk device-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -177,6 +198,7 @@ jobs:
     name: Attach APKs to a private GitHub Release
     runs-on: ubuntu-24.04
     needs: [build, device-test]
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/download-artifact@v4
         with:

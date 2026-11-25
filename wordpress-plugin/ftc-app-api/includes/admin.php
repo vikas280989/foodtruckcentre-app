@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) {
 add_action('admin_menu', function () {
     add_menu_page('App Enquiries', 'App Enquiries', 'manage_options', 'ftc-app-enquiries', 'ftc_app_admin_list', 'dashicons-food', 26);
     add_submenu_page('ftc-app-enquiries', 'App Enquiries', 'All enquiries', 'manage_options', 'ftc-app-enquiries', 'ftc_app_admin_list');
+    add_submenu_page('ftc-app-enquiries', 'App customers', 'Customers', 'manage_options', 'ftc-app-customers', 'ftc_app_admin_customers');
     add_submenu_page('ftc-app-enquiries', 'App settings', 'Settings', 'manage_options', 'ftc-app-settings', 'ftc_app_admin_settings');
 });
 
@@ -44,6 +45,15 @@ function ftc_app_admin_list(): void
     }
     global $wpdb;
     $table = ftc_app_table();
+    $stages = ftc_app_stages();
+
+    if (isset($_POST['ftc_app_stage'], $_POST['ftc_app_id']) && check_admin_referer('ftc_app_stage_' . (int) $_POST['ftc_app_id'])) {
+        $newStage = sanitize_key($_POST['ftc_app_stage']);
+        if (isset($stages[$newStage])) {
+            $wpdb->update($table, ['stage' => $newStage], ['id' => (int) $_POST['ftc_app_id']]);
+            echo '<div class="notice notice-success is-dismissible"><p>Status updated to <strong>' . esc_html($stages[$newStage]) . '</strong>. The customer sees this in the app under My Enquiries.</p></div>';
+        }
+    }
 
     if (!empty($_GET['view'])) {
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", (int) $_GET['view']), ARRAY_A);
@@ -54,8 +64,14 @@ function ftc_app_admin_list(): void
             return;
         }
         echo '<table class="widefat striped" style="max-width:900px"><tbody>';
+        $customerCell = 'Not linked (guest or deleted account)';
+        if ((int) $row['user_id'] > 0 && ($cu = get_user_by('id', (int) $row['user_id']))) {
+            $customerCell = '<a href="' . esc_url(add_query_arg(['page' => 'ftc-app-enquiries', 'customer' => $cu->ID], admin_url('admin.php'))) . '">' . esc_html($cu->display_name) . '</a> &middot; ' . esc_html($cu->user_email)
+                . ' &middot; ' . esc_html((string) get_user_meta($cu->ID, 'ftc_phone', true));
+        }
         $meta = [
-            'Type' => ucfirst($row['type']), 'Status' => ftc_app_status_label($row),
+            'Customer account' => $customerCell,
+            'Type' => ucfirst($row['type']), 'Email status' => ftc_app_status_label($row),
             'Received (UTC)' => $row['created_at'], 'Delivered (UTC)' => (string) $row['sent_at'],
             'Delivery attempts' => (string) $row['attempts'],
         ];
@@ -70,6 +86,15 @@ function ftc_app_admin_list(): void
             }
         }
         echo '</tbody></table>';
+        echo '<form method="post" style="margin:16px 0">';
+        wp_nonce_field('ftc_app_stage_' . (int) $row['id']);
+        echo '<input type="hidden" name="ftc_app_id" value="' . (int) $row['id'] . '"><label><strong>Progress shown to the customer:</strong> <select name="ftc_app_stage">';
+        foreach ($stages as $k => $label) {
+            echo '<option value="' . esc_attr($k) . '"' . selected($row['stage'], $k, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select></label> ';
+        submit_button('Update status', 'secondary', 'submit', false);
+        echo '</form>';
         if (ftc_app_valid_email((string) $row['email'])) {
             echo '<p><a class="button button-primary" href="' . esc_url('mailto:' . $row['email'] . '?subject=' . rawurlencode('Re: ' . $row['subject'])) . '">Reply to ' . esc_html($row['name']) . '</a></p>';
         }
@@ -89,16 +114,24 @@ function ftc_app_admin_list(): void
         $where .= ' AND type = %s';
         $args[] = $type;
     }
+    $customerId = (int) ($_GET['customer'] ?? 0);
+    if ($customerId > 0) {
+        $where .= ' AND user_id = %d';
+        $args[] = $customerId;
+    }
     $paged = max(1, (int) ($_GET['paged'] ?? 1));
     $per = 50;
     $sqlCount = "SELECT COUNT(*) FROM {$table} WHERE {$where}";
     $total = (int) ($args ? $wpdb->get_var($wpdb->prepare($sqlCount, $args)) : $wpdb->get_var($sqlCount));
-    $sql = "SELECT id, enquiry_ref, type, status, name, email, phone, event_date, attempts, last_error, created_at, sent_at FROM {$table} WHERE {$where} ORDER BY id DESC LIMIT %d OFFSET %d";
+    $sql = "SELECT id, enquiry_ref, type, status, stage, user_id, name, email, phone, event_date, attempts, last_error, created_at, sent_at FROM {$table} WHERE {$where} ORDER BY id DESC LIMIT %d OFFSET %d";
     $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($args, [$per, ($paged - 1) * $per])), ARRAY_A);
 
     $base = admin_url('admin.php?page=ftc-app-enquiries');
     echo '<div class="wrap"><h1 class="wp-heading-inline">App Enquiries</h1>';
     echo '<p>Quote and contact enquiries sent from the Food Truck Centre Android app. Each one is also emailed to <strong>' . esc_html((string) get_option('ftc_app_recipient')) . '</strong>.</p>';
+    if ($customerId > 0 && ($cu = get_user_by('id', $customerId))) {
+        echo '<p><strong>Showing enquiries from ' . esc_html($cu->display_name) . ' (' . esc_html($cu->user_email) . ')</strong> &middot; <a href="' . esc_url($base) . '">Show all</a></p>';
+    }
     $filters = ['' => 'All', 'quote' => 'Quotes', 'contact' => 'Contact messages'];
     echo '<ul class="subsubsub">';
     $links = [];
@@ -107,17 +140,18 @@ function ftc_app_admin_list(): void
     }
     $links[] = '<li><a href="' . esc_url(add_query_arg('status', 'failed', $base)) . '"' . ($status === 'failed' ? ' class="current"' : '') . '>Not delivered yet</a></li>';
     echo implode(' | ', $links) . '</ul>';
-    echo '<table class="widefat striped" style="margin-top:12px"><thead><tr><th>Reference</th><th>Received</th><th>Type</th><th>Name</th><th>Email</th><th>Phone</th><th>Event date</th><th>Email status</th></tr></thead><tbody>';
+    echo '<table class="widefat striped" style="margin-top:12px"><thead><tr><th>Reference</th><th>Received</th><th>Type</th><th>Customer</th><th>Email</th><th>Phone</th><th>Event date</th><th>Progress</th><th>Email status</th></tr></thead><tbody>';
     if (!$rows) {
-        echo '<tr><td colspan="8">No enquiries yet.</td></tr>';
+        echo '<tr><td colspan="9">No enquiries yet.</td></tr>';
     }
     foreach ($rows as $r) {
         $url = add_query_arg('view', (int) $r['id'], $base);
         $local = get_date_from_gmt($r['created_at'], 'j M Y, g:i a');
         echo '<tr><td><a href="' . esc_url($url) . '"><strong>' . esc_html($r['enquiry_ref']) . '</strong></a></td>'
             . '<td>' . esc_html($local) . '</td><td>' . esc_html(ucfirst($r['type'])) . '</td>'
-            . '<td>' . esc_html($r['name']) . '</td><td>' . esc_html($r['email']) . '</td><td>' . esc_html($r['phone']) . '</td>'
-            . '<td>' . esc_html($r['event_date']) . '</td><td>' . wp_kses_post(ftc_app_status_label($r)) . '</td></tr>';
+            . '<td>' . ((int) $r['user_id'] > 0 ? '<a href="' . esc_url(add_query_arg('customer', (int) $r['user_id'], $base)) . '">' . esc_html($r['name']) . '</a>' : esc_html($r['name'])) . '</td>'
+            . '<td>' . esc_html($r['email']) . '</td><td>' . esc_html($r['phone']) . '</td>'
+            . '<td>' . esc_html($r['event_date']) . '</td><td>' . esc_html($stages[$r['stage']] ?? 'New') . '</td><td>' . wp_kses_post(ftc_app_status_label($r)) . '</td></tr>';
     }
     echo '</tbody></table>';
     $pages = (int) ceil($total / $per);
@@ -128,6 +162,43 @@ function ftc_app_admin_list(): void
         echo '</p>';
     }
     echo '</div>';
+}
+
+function ftc_app_admin_customers(): void
+{
+    if (!current_user_can('manage_options')) {
+        wp_die('Not allowed.');
+    }
+    global $wpdb;
+    $search = isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '';
+    $q = new WP_User_Query([
+        'role' => FTC_APP_ROLE, 'orderby' => 'registered', 'order' => 'DESC', 'number' => 200,
+        'search' => $search !== '' ? '*' . $search . '*' : '', 'search_columns' => ['user_email', 'display_name', 'user_login'],
+    ]);
+    $users = $q->get_results();
+    $counts = [];
+    foreach ($wpdb->get_results('SELECT user_id, COUNT(*) c, MAX(created_at) last FROM ' . ftc_app_table() . ' WHERE user_id > 0 GROUP BY user_id', ARRAY_A) ?: [] as $c) {
+        $counts[(int) $c['user_id']] = $c;
+    }
+    echo '<div class="wrap"><h1>App customers</h1><p>People who created an account in the Food Truck Centre app (' . (int) $q->get_total() . ' total). Click a name to see everything they sent.</p>';
+    echo '<form method="get"><input type="hidden" name="page" value="ftc-app-customers"><p class="search-box"><input type="search" name="s" value="' . esc_attr($search) . '" placeholder="Name or email"> ';
+    submit_button('Search', 'secondary', '', false);
+    echo '</p></form>';
+    echo '<table class="widefat striped"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th>Enquiries</th><th>Last enquiry</th></tr></thead><tbody>';
+    if (!$users) {
+        echo '<tr><td colspan="6">No customers yet.</td></tr>';
+    }
+    foreach ($users as $u) {
+        $c = $counts[$u->ID] ?? null;
+        $link = add_query_arg(['page' => 'ftc-app-enquiries', 'customer' => $u->ID], admin_url('admin.php'));
+        echo '<tr><td><a href="' . esc_url($link) . '"><strong>' . esc_html($u->display_name) . '</strong></a></td>'
+            . '<td><a href="mailto:' . esc_attr($u->user_email) . '">' . esc_html($u->user_email) . '</a></td>'
+            . '<td>' . esc_html((string) get_user_meta($u->ID, 'ftc_phone', true)) . '</td>'
+            . '<td>' . esc_html(get_date_from_gmt($u->user_registered, 'j M Y')) . '</td>'
+            . '<td>' . (int) ($c['c'] ?? 0) . '</td>'
+            . '<td>' . esc_html($c ? get_date_from_gmt($c['last'], 'j M Y, g:i a') : '—') . '</td></tr>';
+    }
+    echo '</tbody></table></div>';
 }
 
 function ftc_app_status_label(array $r): string

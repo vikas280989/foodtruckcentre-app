@@ -1,8 +1,8 @@
 <?php
 /**
- * The app's endpoints. They answer at the addresses already built into the released APK:
- *   POST /app-api/v1/quote.php     POST /app-api/v1/contact.php     GET /app-api/v1/app-config.php
- * and also at /wp-json/ftc/v1/quote | contact | app-config for future app versions.
+ * The app's endpoints, at /app-api/v1/<name>.php (the address built into the app) and /wp-json/ftc/v1/<name>:
+ *   app-config (GET), quote, contact (POST, login required), auth-register, auth-login, auth-logout,
+ *   auth-forgot (POST), me (GET/POST), me-delete (POST), my-enquiries (GET).
  * Request and response formats are identical to the standalone app-api.
  */
 if (!defined('ABSPATH')) {
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 function ftc_app_maybe_handle_request(): void
 {
     $path = (string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
-    if (!preg_match('#/app-api/v1/(quote|contact|app-config)\.php$#', $path, $m)) {
+    if (!preg_match('#/app-api/v1/(quote|contact|app-config|auth-register|auth-login|auth-logout|auth-forgot|me|me-delete|my-enquiries)\.php$#', $path, $m)) {
         return;
     }
     ftc_app_dispatch($m[1]);
@@ -20,7 +20,9 @@ function ftc_app_maybe_handle_request(): void
 
 function ftc_app_register_rest_routes(): void
 {
-    foreach (['quote' => 'POST', 'contact' => 'POST', 'app-config' => 'GET'] as $route => $method) {
+    $routes = ['quote' => 'POST', 'contact' => 'POST', 'app-config' => 'GET', 'auth-register' => 'POST', 'auth-login' => 'POST',
+        'auth-logout' => 'POST', 'auth-forgot' => 'POST', 'me' => 'GET,POST', 'me-delete' => 'POST', 'my-enquiries' => 'GET'];
+    foreach ($routes as $route => $method) {
         register_rest_route('ftc/v1', '/' . $route, [
             'methods' => $method,
             'permission_callback' => '__return_true', // public: the app has no login; protected by the checks below
@@ -48,7 +50,16 @@ function ftc_app_dispatch(string $endpoint): void
             'contact_email' => ftc_app_valid_email($contact) ? $contact : null,
         ]);
     }
-    ftc_app_handle_submission($endpoint);
+    switch ($endpoint) {
+        case 'auth-register': ftc_app_auth_register(); break;
+        case 'auth-login': ftc_app_auth_login(); break;
+        case 'auth-logout': ftc_app_auth_logout(); break;
+        case 'auth-forgot': ftc_app_auth_forgot(); break;
+        case 'me': ftc_app_me(); break;
+        case 'me-delete': ftc_app_me_delete(); break;
+        case 'my-enquiries': ftc_app_my_enquiries(); break;
+        default: ftc_app_handle_submission($endpoint);
+    }
 }
 
 function ftc_app_handle_submission(string $endpoint): void
@@ -73,6 +84,9 @@ function ftc_app_handle_submission(string $endpoint): void
     if (!is_array($data) || array_is_list($data)) {
         ftc_app_json(400, ['ok' => false, 'error' => 'bad_request', 'message' => 'Invalid request.']);
     }
+
+    // Login is required to send enquiries (app 1.1+). Older app versions get a clear "please update" message.
+    $customer = ftc_app_require_customer();
 
     if (!ftc_app_rate_limit_ok()) {
         header('Retry-After: 600');
@@ -107,7 +121,7 @@ function ftc_app_handle_submission(string $endpoint): void
     }
 
     // Store first, then send. Success is reported only when the mail system accepted the message.
-    $row = ftc_app_save_enquiry($submissionHash, $e, $existing);
+    $row = ftc_app_save_enquiry($submissionHash, $e, $existing, (int) $customer->ID);
     if (($row['status'] ?? '') === 'sent') {
         ftc_app_json(200, ['ok' => true, 'enquiry_id' => $row['enquiry_ref'], 'duplicate' => true]);
     }

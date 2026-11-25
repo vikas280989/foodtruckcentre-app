@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       Food Truck Centre App API
- * Description:       Receives quote and contact enquiries from the Food Truck Centre Android app, emails them through WordPress (your existing SMTP setup) and keeps a copy under "App Enquiries". No payments.
- * Version:           1.0.1
+ * Description:       Customer accounts and enquiries for the Food Truck Centre Android app: customers log in, send quote and contact enquiries, and see their status. Enquiries are emailed through WordPress (your existing SMTP setup) and listed under "App Enquiries". No payments.
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Author:            Food Truck Centre
@@ -14,14 +14,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FTC_APP_VERSION', '1.0.1');
-define('FTC_APP_DB_VERSION', '1');
+define('FTC_APP_VERSION', '1.1.0');
+define('FTC_APP_DB_VERSION', '2');
 define('FTC_APP_DIR', __DIR__);
 
 require_once FTC_APP_DIR . '/includes/helpers.php';
 require_once FTC_APP_DIR . '/includes/validation.php';
 require_once FTC_APP_DIR . '/includes/mail.php';
 require_once FTC_APP_DIR . '/includes/store.php';
+require_once FTC_APP_DIR . '/includes/auth.php';
 require_once FTC_APP_DIR . '/includes/api.php';
 if (is_admin()) {
     require_once FTC_APP_DIR . '/includes/admin.php';
@@ -33,6 +34,7 @@ register_deactivation_hook(__FILE__, 'ftc_app_deactivate');
 function ftc_app_activate(): void
 {
     ftc_app_install_table();
+    ftc_app_add_role();
     add_option('ftc_app_recipient', 'info@foodtruckcentre.com.au');
     add_option('ftc_app_contact_email', 'info@foodtruckcentre.com.au');
     add_option('ftc_app_rate_10min', 5);
@@ -52,6 +54,10 @@ function ftc_app_deactivate(): void
 add_action('plugins_loaded', function () {
     if (get_option('ftc_app_db_version') !== FTC_APP_DB_VERSION) {
         ftc_app_install_table();
+        ftc_app_add_role();
+        if (!wp_next_scheduled('ftc_app_retry_failed')) {
+            wp_schedule_event(time() + 300, 'ftc_app_15min', 'ftc_app_retry_failed');
+        }
     }
 });
 

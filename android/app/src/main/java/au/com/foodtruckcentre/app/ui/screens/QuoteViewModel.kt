@@ -95,6 +95,14 @@ class QuoteViewModel(app: Application) : AndroidViewModel(app) {
         errors.remove(QuoteField.CUISINES)
     }
 
+    /** Fill empty contact fields from the logged-in customer's profile (they can still edit them). */
+    fun fillFromProfile(p: au.com.foodtruckcentre.app.data.Profile?) {
+        if (p == null) return
+        if (name.isBlank()) name = p.name
+        if (email.isBlank()) email = p.email
+        if (phone.isBlank()) phone = p.phone
+    }
+
     fun toggleCuisine(c: Cuisine) {
         touch()
         if (c in selectedCuisines) {
@@ -178,6 +186,8 @@ class QuoteViewModel(app: Application) : AndroidViewModel(app) {
             submitting = false
         }
     }
+
+    fun clearForm() = reset()
 
     private fun reset() {
         selectedCuisines.clear()

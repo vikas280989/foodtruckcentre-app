@@ -12,6 +12,18 @@ function ftc_app_table(): string
     return $wpdb->prefix . 'ftc_app_enquiries';
 }
 
+function ftc_app_tokens_table(): string
+{
+    global $wpdb;
+    return $wpdb->prefix . 'ftc_app_tokens';
+}
+
+/** Customer-visible progress of an enquiry, set by the team in App Enquiries. */
+function ftc_app_stages(): array
+{
+    return ['new' => 'New', 'contacted' => 'Contacted', 'quoted' => 'Quoted', 'confirmed' => 'Confirmed', 'closed' => 'Closed'];
+}
+
 function ftc_app_install_table(): void
 {
     global $wpdb;
@@ -22,6 +34,8 @@ function ftc_app_install_table(): void
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   enquiry_ref varchar(32) NOT NULL,
   type varchar(16) NOT NULL,
+  user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+  stage varchar(20) NOT NULL DEFAULT 'new',
   submission_hash char(64) NOT NULL,
   fingerprint char(64) NOT NULL,
   status varchar(16) NOT NULL DEFAULT 'pending',
@@ -41,7 +55,18 @@ function ftc_app_install_table(): void
   UNIQUE KEY submission_hash (submission_hash),
   KEY fingerprint (fingerprint),
   KEY status (status),
-  KEY created_at (created_at)
+  KEY created_at (created_at),
+  KEY user_id (user_id)
+) {$charset};");
+    $tokens = ftc_app_tokens_table();
+    dbDelta("CREATE TABLE {$tokens} (
+  token_hash char(64) NOT NULL,
+  user_id bigint(20) unsigned NOT NULL,
+  created_at datetime NOT NULL,
+  expires_at datetime NOT NULL,
+  last_used datetime NULL DEFAULT NULL,
+  PRIMARY KEY  (token_hash),
+  KEY user_id (user_id)
 ) {$charset};");
     update_option('ftc_app_db_version', FTC_APP_DB_VERSION, false);
 }
@@ -69,13 +94,14 @@ function ftc_app_find_recent_duplicate(string $fingerprint): ?array
  * Save (or, for a retry of a failed submission, refresh) the enquiry before sending,
  * so nothing is lost even if the mail server is down. Returns the stored row.
  */
-function ftc_app_save_enquiry(string $submissionHash, array $e, ?array $existing): array
+function ftc_app_save_enquiry(string $submissionHash, array $e, ?array $existing, int $userId = 0): array
 {
     global $wpdb;
     $ref = $existing['enquiry_ref'] ?? ftc_app_new_enquiry_ref();
     $data = [
         'enquiry_ref' => $ref,
         'type' => $e['type'],
+        'user_id' => $userId,
         'submission_hash' => $submissionHash,
         'fingerprint' => $e['fingerprint'],
         'status' => 'pending',

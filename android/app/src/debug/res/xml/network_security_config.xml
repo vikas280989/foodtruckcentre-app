@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG BUILD ONLY: allows plain HTTP to the Android emulator's host machine (10.0.2.2), used by the
+     automated end-to-end test server. Everything else stays HTTPS-only. The release build uses
+     src/main/res/xml/network_security_config.xml, which never allows plain HTTP. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

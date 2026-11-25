@@ -109,6 +109,7 @@ fun QuoteScreen(
     onSuccess: (QuoteViewModel.Success) -> Unit,
     onOpenLegal: (SiteContent.LegalPage) -> Unit,
     onBack: (() -> Unit)?,
+    onAccount: (() -> Unit)? = null,
 ) {
     val scroll = rememberScrollState()
     val offsets = remember { mutableStateMapOf<String, Int>() }
@@ -138,6 +139,7 @@ fun QuoteScreen(
             eyebrow = "Event catering enquiry",
             subtitle = SiteContent.FORM_INTRO,
             onBack = onBack,
+            onAccount = onAccount,
         )
 
         Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {

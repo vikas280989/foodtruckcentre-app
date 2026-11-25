@@ -70,4 +70,11 @@ class ValidationTest {
         assertNotNull(Validation.links("http://a http://b http://c www.d"))
         assertNull(Validation.links("see http://a"))
     }
+
+    @Test fun passwordRules() {
+        assertNotNull(Validation.password("abc12"))
+        assertNotNull(Validation.password("abcdefgh"))
+        assertNotNull(Validation.password("12345678"))
+        assertNull(Validation.password("Secret123"))
+    }
 }

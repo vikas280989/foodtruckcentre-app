@@ -58,6 +58,14 @@ object Validation {
     fun message(value: String): String? =
         if (value.trim().length < 5) "Please write a short message." else null
 
+    /** Same rules as the server: 8+ characters with at least one letter and one number. */
+    fun password(value: String): String? = when {
+        value.length < 8 -> "Use at least 8 characters."
+        value.length > 200 -> "That password is too long."
+        value.none { it.isLetter() } || value.none { it.isDigit() } -> "Use at least one letter and one number."
+        else -> null
+    }
+
     private val linkRegex = Regex("(https?://|www\\.)", RegexOption.IGNORE_CASE)
 
     fun links(value: String): String? =

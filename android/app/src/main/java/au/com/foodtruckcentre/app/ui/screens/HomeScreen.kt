@@ -81,9 +81,10 @@ fun HomeScreen(
     onContact: () -> Unit,
     onAbout: () -> Unit,
     onLegal: (SiteContent.LegalPage) -> Unit,
+    onAccount: () -> Unit = {},
 ) {
     LazyColumn(Modifier.fillMaxSize().background(Ftc.Cream), contentPadding = PaddingValues(bottom = 120.dp)) {
-        item { Hero(onQuote = { onQuote(null, null) }, onHowItWorks = onAbout) }
+        item { Hero(onQuote = { onQuote(null, null) }, onHowItWorks = onAbout, onAccount = onAccount) }
         item { Highlights(Modifier.offset(y = (-36).dp)) }
         item { HowToBook(onQuote = { onQuote(null, null) }, onAbout = onAbout) }
         item {
@@ -114,7 +115,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Hero(onQuote: () -> Unit, onHowItWorks: () -> Unit) {
+private fun Hero(onQuote: () -> Unit, onHowItWorks: () -> Unit, onAccount: () -> Unit) {
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
     Box(Modifier.fillMaxWidth().height(600.dp)) {
@@ -145,10 +146,11 @@ private fun Hero(onQuote: () -> Unit, onHowItWorks: () -> Unit) {
                 modifier = Modifier.size(58.dp).clip(CircleShape).background(Color.White).padding(3.dp),
             )
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text("Food Truck Centre", style = MaterialTheme.typography.titleMedium, color = Color.White)
                 Text("foodtruckcentre.com.au", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f))
             }
+            au.com.foodtruckcentre.app.ui.components.AccountButton(onAccount)
         }
         Column(
             Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 52.dp)

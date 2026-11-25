@@ -26,8 +26,8 @@ android {
         applicationId = "au.com.foodtruckcentre.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         // Public HTTPS endpoints only – no secrets live in the app.
         buildConfigField("String", "API_BASE_URL", "\"https://foodtruckcentre.com.au/app-api/v1/\"")
@@ -58,6 +58,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // Automated end-to-end tests point the DEBUG build at a local test server (-PftcApiBase=...).
+            // Release builds always use the live HTTPS address above.
+            (project.findProperty("ftcApiBase") as String?)?.let {
+                buildConfigField("String", "API_BASE_URL", "\"$it\"")
+            }
         }
     }
 
