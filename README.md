@@ -1,6 +1,6 @@
-# Food Truck Centre – Android app
+# Food Truck Centre – Android and iOS apps
 
-Native Android app for **Food Truck Centre Australia** ([foodtruckcentre.com.au](https://foodtruckcentre.com.au/)).
+Native Android and iOS apps for **Food Truck Centre Australia** ([foodtruckcentre.com.au](https://foodtruckcentre.com.au/)).
 Customers create an account (email + password), browse the catering services, see the featured food truck, request quotes, contact the business and follow their enquiries.
 **The app has no payment functionality.**
 
@@ -8,7 +8,7 @@ Customers create an account (email + password), browse the catering services, se
 |---|---|
 | App name | Food Truck Centre |
 | Package | `au.com.foodtruckcentre.app` (debug build: `au.com.foodtruckcentre.app.debug`) |
-| Platform | Android 8.0 (API 26) and newer, targets API 36 |
+| Platform | Android 8.0 (API 26) and newer, targets API 36 · iOS 16+ iPhone (SwiftUI, see [docs/IOS.md](docs/IOS.md)) |
 | Stack | Kotlin, Jetpack Compose, Material 3, OkHttp, kotlinx.serialization, Coil |
 | Backend | WordPress plugin **FTC App API** (`wordpress-plugin/ftc-app-api`, live on foodtruckcentre.com.au): customer accounts, enquiries, email via WP Mail SMTP, admin screens. (`backend/app-api` is the older standalone version, not used.) |
 | Permissions | `INTERNET` only |
@@ -17,10 +17,12 @@ Customers create an account (email + password), browse the catering services, se
 
 ```
 android/            Android Studio project (Kotlin + Compose)
+ios/                iOS app (SwiftUI, XcodeGen project.yml)
 backend/app-api/    PHP email API – upload to public_html/app-api/
 backend/tests/      Automated API tests (45 checks)
 ci/                 Emulator test + dependency vulnerability scripts used by GitHub Actions
-.github/workflows/  Build pipeline: tests → lint → signed build → emulator test → GitHub Release
+.github/workflows/  Android: tests → lint → signed build → emulator test → GitHub Release
+                    iOS: unit tests → simulator end-to-end test → release build; manual TestFlight upload
 branding/           Logo and icon source files
 docs/               Deployment, signing, security audit, test report, limitations
 ```
@@ -53,6 +55,7 @@ To build locally in Android Studio: open the `android` folder, create `android/k
 
 ## Documentation
 
+- [iOS app, testing and App Store publishing](docs/IOS.md)
 - [Backend deployment and email configuration](docs/DEPLOYMENT.md)
 - [Release signing](docs/SIGNING.md)
 - [Security and privacy audit](docs/SECURITY-AUDIT.md)
