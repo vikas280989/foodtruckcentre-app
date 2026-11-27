@@ -128,7 +128,7 @@ function ftc_app_admin_list(): void
 
     $base = admin_url('admin.php?page=ftc-app-enquiries');
     echo '<div class="wrap"><h1 class="wp-heading-inline">App Enquiries</h1>';
-    echo '<p>Quote and contact enquiries sent from the Food Truck Centre Android app. Each one is also emailed to <strong>' . esc_html((string) get_option('ftc_app_recipient')) . '</strong>.</p>';
+    echo '<p>Quote and contact enquiries sent from the Food Truck Centre mobile apps (Android and iOS). Each one is also emailed to <strong>' . esc_html((string) get_option('ftc_app_recipient')) . '</strong>.</p>';
     if ($customerId > 0 && ($cu = get_user_by('id', $customerId))) {
         echo '<p><strong>Showing enquiries from ' . esc_html($cu->display_name) . ' (' . esc_html($cu->user_email) . ')</strong> &middot; <a href="' . esc_url($base) . '">Show all</a></p>';
     }

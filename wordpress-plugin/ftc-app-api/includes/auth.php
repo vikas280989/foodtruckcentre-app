@@ -208,7 +208,7 @@ function ftc_app_auth_register(): void
         ftc_app_json(503, ['ok' => false, 'error' => 'register_failed', 'message' => 'We couldn\'t create your account right now. Please try again later.']);
     }
     update_user_meta($userId, 'ftc_phone', $phone);
-    update_user_meta($userId, 'ftc_registered_via', 'android-app');
+    update_user_meta($userId, 'ftc_registered_via', strtolower(ftc_app_platform()) . '-app');
     $u = get_user_by('id', $userId);
     ftc_app_json(200, ['ok' => true, 'token' => ftc_app_issue_token((int) $userId), 'profile' => ftc_app_profile($u)]);
 }

@@ -4,7 +4,7 @@ Requires PHP: 8.1
 Stable tag: 1.0.1
 License: GPLv2 or later
 
-Receives enquiries from the Food Truck Centre Android app.
+Receives enquiries from the Food Truck Centre Android and iOS apps.
 
 == Description ==
 * Answers the app at /app-api/v1/quote.php, /app-api/v1/contact.php and /app-api/v1/app-config.php

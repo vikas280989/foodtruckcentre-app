@@ -1,0 +1,87 @@
+# XcodeGen project definition. Generate the Xcode project with:  brew install xcodegen && cd ios && xcodegen generate
+name: FoodTruckCentre
+options:
+  bundleIdPrefix: au.com.foodtruckcentre
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: ""          # set to the client's Apple Team ID when the account exists
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  FoodTruckCentre:
+    type: application
+    platform: iOS
+    sources:
+      - path: FoodTruckCentre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.foodtruckcentre.app
+        PRODUCT_NAME: FoodTruckCentre
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: FoodTruckCentre/Info.plist
+      properties:
+        CFBundleDisplayName: Food Truck Centre
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: logo_badge
+          UIImageRespectsSafeAreaInsets: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIAppFonts:
+          - Poppins-Regular.ttf
+          - Poppins-Medium.ttf
+          - Poppins-SemiBold.ttf
+          - Poppins-Bold.ttf
+          - Poppins-ExtraBold.ttf
+        NSAppTransportSecurity:
+          # HTTPS everywhere. Local-network exception only lets the automated tests reach the test
+          # server on the Mac running the simulator; the live app only ever talks to https://foodtruckcentre.com.au
+          NSAllowsLocalNetworking: true
+  FoodTruckCentreTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [FoodTruckCentreTests]
+    dependencies:
+      - target: FoodTruckCentre
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.foodtruckcentre.app.tests
+  FoodTruckCentreUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [FoodTruckCentreUITests]
+    dependencies:
+      - target: FoodTruckCentre
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.foodtruckcentre.app.uitests
+        TEST_TARGET_NAME: FoodTruckCentre
+schemes:
+  FoodTruckCentre:
+    build:
+      targets:
+        FoodTruckCentre: all
+    test:
+      config: Debug
+      targets:
+        - FoodTruckCentreTests
+        - FoodTruckCentreUITests
+    archive:
+      config: Release

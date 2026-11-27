@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       Food Truck Centre App API
- * Description:       Customer accounts and enquiries for the Food Truck Centre Android app: customers log in, send quote and contact enquiries, and see their status. Enquiries are emailed through WordPress (your existing SMTP setup) and listed under "App Enquiries". No payments.
- * Version:           1.1.0
+ * Description:       Customer accounts and enquiries for the Food Truck Centre Android and iOS apps: customers log in, send quote and contact enquiries, and see their status. Enquiries are emailed through WordPress (your existing SMTP setup) and listed under "App Enquiries". No payments.
+ * Version:           1.1.1
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Author:            Food Truck Centre
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FTC_APP_VERSION', '1.1.0');
+define('FTC_APP_VERSION', '1.1.1');
 define('FTC_APP_DB_VERSION', '2');
 define('FTC_APP_DIR', __DIR__);
 
