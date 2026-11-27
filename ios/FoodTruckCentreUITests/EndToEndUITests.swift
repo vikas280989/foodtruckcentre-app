@@ -90,7 +90,7 @@ final class EndToEndUITests: XCTestCase {
         type("Password", password, secure: true) // the app clears the password after a failed attempt
         dismissKeyboard(); app.buttons["logIn"].tap()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 30), "logged in again")
-        app.buttons["accountButton"].firstMatch.tap()
+        tapVisible("accountButton")
         XCTAssertTrue(app.descendants(matching: .any)["enquiry.\(enquiryId)"].waitForExistence(timeout: 20), "enquiry still there after login")
     }
 
@@ -136,6 +136,19 @@ final class EndToEndUITests: XCTestCase {
             if ret.exists { ret.tap() }
             _ = XCTWaiter().wait(for: [expectation(for: gone, evaluatedWith: keyboard)], timeout: 4)
         }
+    }
+
+    /// Taps the on-screen element with this identifier (screen transitions can leave an off-screen copy for a moment).
+    private func tapVisible(_ id: String) {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let all = app.buttons.matching(identifier: id).allElementsBoundByIndex
+            if let el = all.first(where: { $0.exists && $0.isHittable && app.frame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }) {
+                el.tap(); return
+            }
+            usleep(300_000)
+        }
+        XCTFail("no visible \(id)")
     }
 
     private func shot(_ name: String) {
