@@ -44,7 +44,7 @@ enum HtmlParser {
                 case "h": blocks.append(.heading(text: text, number: nil, level: headingLevel))
                 case "li": if inOl { pendingOl.append(merged) } else { blocks.append(.bullet(merged)) }
                 default:
-                    if merged.allSatisfy({ $0.bold || $0.text.trimmingCharacters(in: .whitespaces).isEmpty }) && text.count < 90 {
+                    if merged.allSatisfy({ $0.bold || $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) && text.count < 90 {
                         blocks.append(.heading(text: text, number: nil, level: 3))
                     } else {
                         blocks.append(.paragraph(merged))
@@ -58,7 +58,7 @@ enum HtmlParser {
             // The website formats section titles as single-item numbered lists in bold.
             for item in pendingOl {
                 let text = item.map(\.text).joined().trimmingCharacters(in: .whitespaces)
-                if item.allSatisfy({ $0.bold || $0.text.trimmingCharacters(in: .whitespaces).isEmpty }) && text.count < 90 {
+                if item.allSatisfy({ $0.bold || $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) && text.count < 90 {
                     sectionNumber += 1
                     blocks.append(.heading(text: text, number: sectionNumber, level: 2))
                 } else {
@@ -135,10 +135,16 @@ enum HtmlParser {
             }
         }
         guard !out.isEmpty else { return out }
-        out[0].text = String(out[0].text.drop(while: { $0 == " " }))
-        while let last = out.last?.text.last, last == " " { out[out.count - 1].text.removeLast() }
+        // Trim spaces and line breaks around the block, like the Android app (trimStart / trimEnd).
+        out[0].text = String(out[0].text.drop(while: { $0.isWhitespace }))
+        while let last = out.last?.text.last, last.isWhitespace { out[out.count - 1].text.removeLast() }
         out = out.filter { !$0.text.isEmpty }
-        return out.contains(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ? out : []
+        guard out.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { return [] }
+        // Never more than one blank line in a row.
+        for i in out.indices {
+            out[i].text = out[i].text.replacingOccurrences(of: "\n[ ]*\n([ ]*\n)+", with: "\n\n", options: .regularExpression)
+        }
+        return out
     }
 
     private static let entities: [(String, String)] = [

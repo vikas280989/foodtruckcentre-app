@@ -21,20 +21,20 @@ enum QuoteField: String, CaseIterable {
 @MainActor
 final class QuoteModel: ObservableObject {
     @Published var cuisines: Set<SiteContent.Cuisine> = []
-    @Published var name = ""
-    @Published var email = ""
-    @Published var phone = ""
-    @Published var eventDate: Date? = nil
-    @Published var foodTime = ""
-    @Published var address = ""
-    @Published var postcode = ""
-    @Published var eventType: String? = nil
-    @Published var meals = ""
-    @Published var paying: String? = nil
-    @Published var power: String? = nil
-    @Published var privateLand: String? = nil
-    @Published var entrance: String? = nil
-    @Published var info = ""
+    @Published var name = "" { didSet { if name != oldValue { errors["name"] = nil } } }
+    @Published var email = "" { didSet { if email != oldValue { errors["email"] = nil } } }
+    @Published var phone = "" { didSet { if phone != oldValue { errors["phone"] = nil } } }
+    @Published var eventDate: Date? = nil { didSet { if eventDate != oldValue { errors["event_date"] = nil } } }
+    @Published var foodTime = "" { didSet { if foodTime != oldValue { errors["food_time"] = nil } } }
+    @Published var address = "" { didSet { if address != oldValue { errors["event_address"] = nil } } }
+    @Published var postcode = "" { didSet { if postcode != oldValue { errors["postcode"] = nil } } }
+    @Published var eventType: String? = nil { didSet { if eventType != oldValue { errors["event_type"] = nil } } }
+    @Published var meals = "" { didSet { if meals != oldValue { errors["meals"] = nil } } }
+    @Published var paying: String? = nil { didSet { if paying != oldValue { errors["paying"] = nil } } }
+    @Published var power: String? = nil { didSet { if power != oldValue { errors["power"] = nil } } }
+    @Published var privateLand: String? = nil { didSet { if privateLand != oldValue { errors["private_land"] = nil } } }
+    @Published var entrance: String? = nil { didSet { if entrance != oldValue { errors["entrance"] = nil } } }
+    @Published var info = "" { didSet { if info != oldValue { errors["additional_info"] = nil } } }
 
     @Published var errors: [String: String] = [:]
     @Published private(set) var submitting = false
@@ -163,10 +163,10 @@ final class QuoteModel: ObservableObject {
 
 @MainActor
 final class ContactModel: ObservableObject {
-    @Published var name = ""
-    @Published var email = ""
+    @Published var name = "" { didSet { if name != oldValue { errors["name"] = nil } } }
+    @Published var email = "" { didSet { if email != oldValue { errors["email"] = nil } } }
     @Published var topic = SiteContent.contactTopics[0]
-    @Published var message = ""
+    @Published var message = "" { didSet { if message != oldValue { errors["message"] = nil } } }
     @Published var errors: [String: String] = [:]
     @Published private(set) var submitting = false
     @Published var banner: BannerState? = nil
@@ -288,10 +288,10 @@ final class ContentModel: ObservableObject {
 final class AuthModel: ObservableObject {
     enum Mode { case login, register }
     @Published var mode: Mode = .login
-    @Published var name = ""
-    @Published var email = ""
-    @Published var phone = ""
-    @Published var password = ""
+    @Published var name = "" { didSet { if name != oldValue { errors["name"] = nil } } }
+    @Published var email = "" { didSet { if email != oldValue { errors["email"] = nil } } }
+    @Published var phone = "" { didSet { if phone != oldValue { errors["phone"] = nil } } }
+    @Published var password = "" { didSet { if password != oldValue { errors["password"] = nil } } }
     @Published var acceptedTerms = false
     @Published var errors: [String: String] = [:]
     @Published var banner: BannerState? = nil
@@ -330,9 +330,9 @@ final class AuthModel: ObservableObject {
         case .success:
             password = ""; name = ""; phone = ""; acceptedTerms = false; errors = [:]
         case .failure(let err):
+            password = "" // cleared first so the server's field errors below stay visible
             if case .invalid(let m, let f) = err { errors.merge(f) { $1 }; banner = BannerState(message: m, offline: false) }
             else { banner = BannerState(message: err.message, offline: err.offline) }
-            password = ""
         }
     }
 

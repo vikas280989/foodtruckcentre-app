@@ -87,6 +87,11 @@ final class HtmlParserTests: XCTestCase {
         XCTAssertEqual(blocks[1], .image(URL(string: "https://ok/x.jpg")!))
     }
 
+    func testLineBreakOnlyParagraphsDropped() {
+        let blocks = HtmlParser.parse("<p><br><br></p><p>&nbsp;<br>\n</p><p>Hi<br>there<br><br><br><br>again<br></p><p></p>")
+        XCTAssertEqual(blocks, [.paragraph([HtmlSpan(text: "Hi\nthere\n\nagain")])])
+    }
+
     func testEntities() {
         XCTAssertEqual(HtmlParser.decode("Australia&#8217;s &#x2013; &rsquo;"), "Australia’s – ’")
     }

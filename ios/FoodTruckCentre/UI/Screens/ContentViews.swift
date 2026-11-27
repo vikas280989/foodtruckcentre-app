@@ -114,7 +114,7 @@ struct FeaturingView: View {
                             Label(c.label, systemImage: c.symbol).font(.ftcLabel).foregroundStyle(Color.ftcNavyDeep)
                                 .padding(.horizontal, 12).padding(.vertical, 6).background(Capsule().fill(Color.ftcMustardSoft))
                         }
-                        Card { RichText(blocks: f.blocks, onQuoteLink: { openQuote(f) }) }
+                        if !f.blocks.isEmpty { Card { RichText(blocks: f.blocks, onQuoteLink: { openQuote(f) }) } }
                         PrimaryButton(title: "Request a Quote", systemImage: "doc.text.fill") { openQuote(f) }
                     }
                 }
