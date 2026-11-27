@@ -148,6 +148,7 @@ final class EndToEndUITests: XCTestCase {
             }
             usleep(300_000)
         }
+        print("UI TREE:\n" + app.debugDescription)
         XCTFail("no visible \(id)")
     }
 

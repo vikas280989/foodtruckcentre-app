@@ -346,3 +346,22 @@ struct KeyboardDone: ViewModifier {
 extension View {
     func keyboardDoneButton() -> some View { modifier(KeyboardDone()) }
 }
+
+/// A photo that fills a fixed-height box at the available width and is cropped to it
+/// (a bare scaledToFill image would make its container wider than the screen).
+struct FillImage: View {
+    let name: String
+    let height: CGFloat
+    var label: String? = nil
+    var body: some View {
+        Color.ftcCreamDeep
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay(Image(name).resizable().scaledToFill())
+            .clipped()
+            .accessibilityElement()
+            .accessibilityAddTraits(.isImage)
+            .accessibilityLabel(label ?? "")
+            .accessibilityHidden(label == nil)
+    }
+}

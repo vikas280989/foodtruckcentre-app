@@ -46,7 +46,7 @@ struct ServicesView: View {
                 VStack(spacing: 16) {
                     ForEach(SiteContent.services) { s in
                         VStack(alignment: .leading, spacing: 0) {
-                            Image(s.image).resizable().scaledToFill().frame(height: 170).frame(maxWidth: .infinity).clipped()
+                            FillImage(name: s.image, height: 170)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(s.title).font(.ftcHeadline).foregroundStyle(Color.ftcNavy).accessibilityAddTraits(.isHeader)
@@ -99,11 +99,11 @@ struct FeaturingView: View {
                         }
                     case .ready(let f?):
                         if let img = f.image {
-                            AsyncImage(url: img) { phase in
-                                if let image = phase.image { image.resizable().scaledToFill() }
-                                else { Rectangle().fill(Color.ftcCreamDeep).overlay(ProgressView()) }
-                            }
-                            .frame(height: 230).frame(maxWidth: .infinity).clipped()
+                            Color.ftcCreamDeep.frame(height: 230).frame(maxWidth: .infinity)
+                            .overlay(AsyncImage(url: img) { phase in
+                                if let image = phase.image { image.resizable().scaledToFill() } else { ProgressView() }
+                            })
+                            .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .accessibilityLabel(f.headline ?? "Featured food truck")
                         }
@@ -143,7 +143,7 @@ struct ContactView: View {
             ScreenHeader(title: "Contact Us", subtitle: SiteContent.contactIntro, onAccount: { router.push(.account) })
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Image("photo_contact").resizable().scaledToFill().frame(height: 160).frame(maxWidth: .infinity).clipped()
+                    FillImage(name: "photo_contact", height: 160)
                         .clipShape(RoundedRectangle(cornerRadius: 22)).accessibilityHidden(true)
                     if let id = m.sentId {
                         Card {
@@ -205,8 +205,8 @@ struct AboutView: View {
             ScreenHeader(title: "How to Book with Us", subtitle: "Time has changed", onBack: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Image("photo_howto").resizable().scaledToFill().frame(height: 220).frame(maxWidth: .infinity).clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 28)).accessibilityLabel("Guests at a food truck event")
+                    FillImage(name: "photo_howto", height: 220, label: "Guests at a food truck event")
+                        .clipShape(RoundedRectangle(cornerRadius: 28))
                     Card {
                         Text(SiteContent.intro).font(.ftcBody).foregroundStyle(Color.ftcInk)
                         Text(SiteContent.intro2).font(.ftcBody).foregroundStyle(Color.ftcInk)

@@ -70,7 +70,7 @@ struct HomeView: View {
                                 ForEach(SiteContent.services) { s in
                                     Button { router.open(.services) } label: {
                                         VStack(alignment: .leading, spacing: 8) {
-                                            Image(s.image).resizable().scaledToFill().frame(width: 200, height: 120).clipped()
+                                            FillImage(name: s.image, height: 120).frame(width: 200)
                                                 .clipShape(RoundedRectangle(cornerRadius: 16))
                                             Text(s.title).font(.ftcLabel).foregroundStyle(Color.ftcNavy).lineLimit(1)
                                         }
@@ -99,8 +99,7 @@ struct HomeView: View {
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
-            Image("photo_hero").resizable().scaledToFill().frame(height: 330).frame(maxWidth: .infinity).clipped()
-                .accessibilityLabel("Food trucks at an event")
+            FillImage(name: "photo_hero", height: 330, label: "Food trucks at an event")
             LinearGradient(colors: [.clear, Color.ftcNavyDeep.opacity(0.92)], startPoint: .top, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 14) {
                 Text("FOOD TRUCK CATERING").font(FtcFont.poppins(12, .bold, relativeTo: .caption)).tracking(1.4)
@@ -126,7 +125,7 @@ struct HomeView: View {
     private var howItWorks: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionTitle(title: "How it works")
-            Image("photo_howto").resizable().scaledToFill().frame(height: 170).frame(maxWidth: .infinity).clipped()
+            FillImage(name: "photo_howto", height: 170)
                 .clipShape(RoundedRectangle(cornerRadius: 20)).accessibilityHidden(true)
             ProcessSteps()
         }
