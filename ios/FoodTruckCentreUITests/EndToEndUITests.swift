@@ -84,7 +84,9 @@ final class EndToEndUITests: XCTestCase {
         type("Password", "wrong-password1", secure: true)
         app.buttons["logIn"].tap()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 5) == false, "wrong password refused")
-        XCTAssertTrue(app.descendants(matching: .any)["banner"].firstMatch.waitForExistence(timeout: 10), "error shown")
+        let refused = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'incorrect'")).firstMatch
+        if !refused.waitForExistence(timeout: 15) { print("UI TREE:\n" + app.debugDescription); shot("fail-login") }
+        XCTAssertTrue(refused.exists, "error shown for the wrong password")
         type("Password", password, secure: true) // the app clears the password after a failed attempt
         app.buttons["logIn"].tap()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 30), "logged in again")

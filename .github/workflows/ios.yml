@@ -64,6 +64,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/xcodebuild-test.log" | grep -E "Test Case|error:|passed|failed|TEST " || true
           grep -q "\*\* TEST SUCCEEDED \*\*" "$RUNNER_TEMP/xcodebuild-test.log"
 
+      - name: Show test server log and UI tree on failure
+        if: failure()
+        run: |
+          grep -E "app-api" "$RUNNER_TEMP/php.log" | tail -40 || true
+          sed -n '/UI TREE:/,/^Test Case/p' "$RUNNER_TEMP/xcodebuild-test.log" | head -150 || true
+
       - name: Server-side check – enquiry stored, emailed and linked to the iOS account
         run: |
           WP="php $RUNNER_TEMP/wp-test/wp-cli.phar --path=$RUNNER_TEMP/wp-test/wp"
