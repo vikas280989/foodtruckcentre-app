@@ -396,6 +396,7 @@ final class AuthModel: ObservableObject {
     }
 
     func reset() {
+        mode = .login
         name = ""; email = ""; phone = ""; password = ""; acceptedTerms = false; errors = [:]; banner = nil
         enquiries = .loading; profileName = ""; profilePhone = ""; profileSaved = false; deletePassword = ""; forgotSent = nil
     }
