@@ -27,7 +27,7 @@ final class EndToEndUITests: XCTestCase {
         type("Password", password, secure: true)
         app.buttons["acceptTerms"].tap()
         shot("02-register")
-        app.buttons["createAccount"].tap()
+        dismissKeyboard(); app.buttons["createAccount"].tap()
 
         // Home
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 30), "account created and home shown")
@@ -82,13 +82,13 @@ final class EndToEndUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["authTitle"].waitForExistence(timeout: 15), "back to login after logout")
         type("Email", email)
         type("Password", "wrong-password1", secure: true)
-        app.buttons["logIn"].tap()
+        dismissKeyboard(); app.buttons["logIn"].tap()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 5) == false, "wrong password refused")
         let refused = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'incorrect'")).firstMatch
         if !refused.waitForExistence(timeout: 15) { print("UI TREE:\n" + app.debugDescription); shot("fail-login") }
         XCTAssertTrue(refused.exists, "error shown for the wrong password")
         type("Password", password, secure: true) // the app clears the password after a failed attempt
-        app.buttons["logIn"].tap()
+        dismissKeyboard(); app.buttons["logIn"].tap()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 30), "logged in again")
         app.buttons["accountButton"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["enquiry.\(enquiryId)"].waitForExistence(timeout: 20), "enquiry still there after login")
@@ -126,8 +126,16 @@ final class EndToEndUITests: XCTestCase {
     }
 
     private func dismissKeyboard() {
-        let done = app.buttons["keyboardDone"]
-        if app.keyboards.count > 0 && done.exists { done.tap() }
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        let done = app.buttons.matching(identifier: "keyboardDone").firstMatch
+        if done.waitForExistence(timeout: 3) && done.isHittable { done.tap() }
+        let gone = NSPredicate(format: "exists == false")
+        if XCTWaiter().wait(for: [expectation(for: gone, evaluatedWith: keyboard)], timeout: 4) != .completed {
+            let ret = keyboard.buttons["Return"]
+            if ret.exists { ret.tap() }
+            _ = XCTWaiter().wait(for: [expectation(for: gone, evaluatedWith: keyboard)], timeout: 4)
+        }
     }
 
     private func shot(_ name: String) {

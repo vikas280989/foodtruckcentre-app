@@ -40,6 +40,8 @@ struct AuthView: View {
                     FtcTextField(label: "Password", text: $m.password, error: m.errors["password"],
                                  placeholder: m.mode == .register ? "8+ characters, a letter and a number" : "",
                                  contentType: m.mode == .register ? .newPassword : .password, isPassword: true)
+                        .submitLabel(m.mode == .register ? .done : .go)
+                        .onSubmit { if m.mode == .login { hideKeyboard(); Task { await m.submit() } } }
                     if m.mode == .register {
                         Button { m.acceptedTerms.toggle(); m.errors["terms"] = nil } label: {
                             HStack(alignment: .top, spacing: 10) {
