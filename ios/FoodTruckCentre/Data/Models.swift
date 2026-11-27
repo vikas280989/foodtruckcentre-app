@@ -249,7 +249,7 @@ final class ContentModel: ObservableObject {
         }
     }
 
-    static func parseFeatured(_ html: String) -> FeaturedContent? {
+    nonisolated static func parseFeatured(_ html: String) -> FeaturedContent? {
         let blocks = HtmlParser.parse(html)
         let text = HtmlParser.plainText(html)
         let images = blocks.compactMap { if case .image(let u) = $0 { return u }; return nil }
@@ -273,7 +273,7 @@ final class ContentModel: ObservableObject {
     }
 
     /// Copy of the page bundled with the app (taken from the website), shown only when offline.
-    static func bundled(_ page: SiteContent.LegalPage) -> Loadable<LegalContent>? {
+    nonisolated static func bundled(_ page: SiteContent.LegalPage) -> Loadable<LegalContent>? {
         guard let url = Bundle.main.url(forResource: page.rawValue, withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
