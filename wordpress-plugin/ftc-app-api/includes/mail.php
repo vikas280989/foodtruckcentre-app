@@ -35,7 +35,7 @@ function ftc_app_email_html(string $heading, string $intro, array $sections, str
         . '<tr><td style="padding:0 28px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' . $rows . '</table></td></tr>'
         . '<tr><td style="padding:16px 28px;background:#f7f9fb;font:400 12px/1.6 Arial,sans-serif;color:#64748b;">'
         . 'Enquiry ID: <strong>' . ftc_app_h($enquiryId) . '</strong><br>Received: ' . ftc_app_h($received) . '<br>'
-        . 'Sent from the Food Truck Centre Android app. Reply to this email to respond directly to the customer. All app enquiries are also listed in WordPress under App Enquiries.'
+        . 'Sent from the Food Truck Centre ' . ftc_app_platform() . ' app. Reply to this email to respond directly to the customer. All app enquiries are also listed in WordPress under App Enquiries.'
         . '</td></tr></table></td></tr></table></body></html>';
 }
 

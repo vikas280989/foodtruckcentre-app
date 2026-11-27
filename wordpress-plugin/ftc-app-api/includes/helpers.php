@@ -3,7 +3,14 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-/** Send a JSON response in the exact format the Android app expects, and stop. */
+/** Which app sent the request ("iOS" or "Android"), from the app's User-Agent. */
+function ftc_app_platform(): string
+{
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    return str_contains($ua, '(iOS)') ? 'iOS' : 'Android';
+}
+
+/** Send a JSON response in the exact format the apps expect, and stop. */
 function ftc_app_json(int $status, array $body): void
 {
     if (!headers_sent()) {

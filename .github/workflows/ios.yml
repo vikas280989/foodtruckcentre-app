@@ -1,0 +1,134 @@
+name: Build and test iOS app
+
+on:
+  push:
+    branches: [main, 'dev/**']
+    paths: ['ios/**', 'wordpress-plugin/**', 'ci/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only used to publish simulator screenshots to the ios-screenshots branch
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: Unit tests, simulator end-to-end test, release build
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3
+
+      - name: Start a local test copy of the WordPress backend (never the live site)
+        run: |
+          bash ci/setup_local_wp.sh "$RUNNER_TEMP/wp-test"
+          nohup php -S 127.0.0.1:8800 "$RUNNER_TEMP/wp-test/router.php" > "$RUNNER_TEMP/php.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8800/app-api/v1/app-config.php && break; sleep 1; done
+          echo; curl -fsS http://127.0.0.1:8800/app-api/v1/app-config.php | grep -q '"ok":true'
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+          xcodebuild -version
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[(r,x) for r,l in d.items() if 'iOS' in r for x in l if x['name'].startswith('iPhone 16') and 'Plus' not in x['name'] and 'Max' not in x['name']]
+          c.sort(key=lambda t:t[0]); print(c[-1][1]['udid'])")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Unit tests + end-to-end UI test (simulator)
+        working-directory: ios
+        env:
+          TEST_RUNNER_FTC_API_BASE: http://127.0.0.1:8800/app-api/v1/
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project FoodTruckCentre.xcodeproj -scheme FoodTruckCentre -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath "$RUNNER_TEMP/Tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/xcodebuild-test.log" | grep -E "Test Case|error:|passed|failed|TEST " || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" "$RUNNER_TEMP/xcodebuild-test.log"
+
+      - name: Show test server log and UI tree on failure
+        if: failure()
+        run: |
+          grep -E "app-api" "$RUNNER_TEMP/php.log" | tail -40 || true
+          sed -n '/UI TREE:/,/^Test Case/p' "$RUNNER_TEMP/xcodebuild-test.log" | head -150 || true
+
+      - name: Server-side check – enquiry stored, emailed and linked to the iOS account
+        run: |
+          WP="php $RUNNER_TEMP/wp-test/wp-cli.phar --path=$RUNNER_TEMP/wp-test/wp"
+          R=$($WP eval 'global $wpdb; $r=$wpdb->get_row("SELECT e.status, e.user_id, u.user_email FROM ".ftc_app_table()." e JOIN {$wpdb->users} u ON u.ID=e.user_id WHERE u.user_email LIKE \"ios.e2e.%\" ORDER BY e.id DESC LIMIT 1", ARRAY_A); echo $r ? $r["status"]."|".$r["user_email"] : "missing";')
+          echo "Latest iOS enquiry: $R"
+          case "$R" in sent\|ios.e2e.*) echo "OK";; *) echo "::error::iOS enquiry not stored/emailed"; exit 1;; esac
+          ls "$RUNNER_TEMP/wp-test/outbox" | head
+          F=$(ls -t "$RUNNER_TEMP"/wp-test/outbox/*.json | head -1)
+          grep -q 'Pizza \\/ Italian' "$F" || { echo "::error::quote email missing cuisines"; exit 1; }; echo "Quote email captured with the selected cuisines"
+          grep -q 'Food Truck Centre iOS app' "$F" || { echo "::error::email not labelled iOS"; exit 1; }; echo "Email is labelled as sent from the iOS app"
+
+      - name: Release build (device, unsigned) and checks
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build -project FoodTruckCentre.xcodeproj -scheme FoodTruckCentre -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/rel" \
+            CODE_SIGNING_ALLOWED=NO | tail -n 5
+          APP="$RUNNER_TEMP/rel/Build/Products/Release-iphoneos/FoodTruckCentre.app"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' "$APP/Info.plist"
+          if strings "$APP/FoodTruckCentre" | grep -q "FTC_API_BASE"; then echo "::error::test-server override present in release"; exit 1; fi
+          strings "$APP/FoodTruckCentre" | grep -q "https://foodtruckcentre.com.au/app-api/v1/" && echo "Release uses the live HTTPS API only"
+          if grep -rIl -E "(BEGIN (RSA |EC )?PRIVATE KEY|sk_live_|AKIA[0-9A-Z]{16})" "$APP"; then echo "::error::secret-like content in app"; exit 1; fi
+          ls "$APP" | grep -E "Poppins|\.json|Assets.car"
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/screens"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/Tests.xcresult" --output-path "$RUNNER_TEMP/screens" || true
+          ls "$RUNNER_TEMP/screens" | head -40
+
+      - name: Publish screenshots to the ios-screenshots branch (for review)
+        if: success()
+        run: |
+          OUT="$RUNNER_TEMP/shots"; mkdir -p "$OUT"
+          python3 - "$RUNNER_TEMP/screens" "$OUT" <<'PY'
+          import json, shutil, sys, os, re
+          src, out = sys.argv[1], sys.argv[2]
+          for test in json.load(open(os.path.join(src, 'manifest.json'))):
+              for a in test.get('attachments', []):
+                  name = a.get('suggestedHumanReadableName', '')
+                  m = re.match(r'(\d\d-[a-z-]+)', name)
+                  if m and a['exportedFileName'].endswith('.png'):
+                      shutil.copy(os.path.join(src, a['exportedFileName']), os.path.join(out, m.group(1) + '.png'))
+          print(sorted(os.listdir(out)))
+          PY
+          cd "$OUT"
+          git init -q -b ios-screenshots
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com add .
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "iOS simulator screenshots ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-test-results
+          path: |
+            ${{ runner.temp }}/screens
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/php.log
+          retention-days: 14
