@@ -77,7 +77,9 @@ jobs:
           echo "Latest iOS enquiry: $R"
           case "$R" in sent\|ios.e2e.*) echo "OK";; *) echo "::error::iOS enquiry not stored/emailed"; exit 1;; esac
           ls "$RUNNER_TEMP/wp-test/outbox" | head
-          grep -l "Pizza / Italian" "$RUNNER_TEMP"/wp-test/outbox/*.json >/dev/null && echo "Quote email captured with the selected cuisines"
+          F=$(ls -t "$RUNNER_TEMP"/wp-test/outbox/*.json | head -1)
+          grep -q 'Pizza \\/ Italian' "$F" || { echo "::error::quote email missing cuisines"; exit 1; }; echo "Quote email captured with the selected cuisines"
+          grep -q 'Food Truck Centre iOS app' "$F" || { echo "::error::email not labelled iOS"; exit 1; }; echo "Email is labelled as sent from the iOS app"
 
       - name: Release build (device, unsigned) and checks
         working-directory: ios
